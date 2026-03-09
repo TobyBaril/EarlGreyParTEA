@@ -23,6 +23,8 @@ test/unit_test_*/
 *.log
 *.swp
 *~
+final_test.yaml
+test_*.yaml
 
 # IDE
 .vscode/
@@ -32,7 +34,3 @@ test/unit_test_*/
 # OS
 .DS_Store
 Thumbs.db
-
-# Generated files
-final_test.yaml
-test_*.yaml

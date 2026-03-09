@@ -1,0 +1,46 @@
+EarlGrey ParTEA Repository Files
+Generated: Mon Mar  9 04:23:56 PM CET 2026
+
+Root Scripts:
+/data/toby/EarlGreyParTEA/earlGreyParTEA
+/data/toby/EarlGreyParTEA/earlGreyParTEA_AnnotationOnly
+/data/toby/EarlGreyParTEA/earlGreyParTEA_LibConstruct
+
+Snakemake Files:
+- Snakefile
+- rules/annotate_simple.smk
+- rules/annotate.smk
+- rules/clustering.smk
+- rules/lib_construct.smk
+
+Python Scripts:
+- scripts/generate_dag.py
+- scripts/__init__.py
+- scripts/on_start_functions.py
+
+Shell Scripts:
+- scripts/combine_results.sh
+- scripts/concat_lines.sh
+- scripts/configure_dfam.sh
+- scripts/make_directories.sh
+- scripts/to_lowercase.sh
+- scripts/to_uppercase.sh
+
+Configuration:
+- config/config.yaml
+
+Documentation:
+- README.md
+- PACKAGING.md
+- VERSION_COMPATIBILITY.md
+- AUTO_DETECTION.md
+- workflow_visualization_README.md
+- CONTRIBUTING.md
+
+Conda Packaging:
+- conda/meta.yaml
+- conda/build.sh
+
+Other:
+- .gitignore
+- LICENSE
