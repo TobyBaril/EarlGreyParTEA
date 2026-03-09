@@ -1,0 +1,253 @@
+#!/usr/bin/env bash
+
+# earlGreyParTEA - Pangenome TE Analysis Pipeline (Full Mode)
+# Version 1.0.0
+# A Snakemake-based multi-genome transposable element annotation pipeline
+
+set -e
+
+VERSION="1.0.0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+usage() {
+    cat << EOF
+#############################
+earlGreyParTEA version ${VERSION}
+Pangenome TE Analysis - Full Pipeline Mode
+
+This runs the complete pipeline: library construction + annotation
+
+Required Parameters:
+    -c, --config FILE       Path to config.yaml file
+    -t, --threads INT       Number of threads to use
+
+Optional Parameters:
+    -m, --memory INT        Maximum memory in MB (default: no limit)
+    -n, --dry-run           Perform dry run (show what would be executed)
+    --generate-config FILE  Generate an example config.yaml template
+    --unlock                Unlock working directory after crash
+    --rerun-incomplete      Rerun incomplete jobs from previous run
+    -h, --help              Show this help message
+
+Example Usage:
+    # Generate example config
+    earlGreyParTEA --generate-config my_config.yaml
+    
+    # Run full pipeline
+    earlGreyParTEA -c my_config.yaml -t 16
+    
+    # Run with memory limit
+    earlGreyParTEA -c my_config.yaml -t 32 -m 128000
+    
+    # Dry run to check what will execute
+    earlGreyParTEA -c my_config.yaml -t 16 --dry-run
+
+Documentation:
+    https://github.com/TobyBaril/EarlGreyParTEA
+
+Questions/Issues:
+    tobias.baril[at]unine.ch
+    https://github.com/TobyBaril/EarlGreyParTEA/issues
+#############################
+EOF
+}
+
+generate_example_config() {
+    local output_file="$1"
+    cat > "$output_file" << 'EOF'
+# EarlGrey Pangenome Pipeline Configuration
+# Full Mode: Complete library construction and annotation
+
+# Input genomes
+genome:
+  genome1: /path/to/genome1.fasta
+  genome2: /path/to/genome2.fasta
+  genome3: /path/to/genome3.fasta
+
+# Species identifiers (must match keys in 'genome' above)
+species:
+  - genome1
+  - genome2
+  - genome3
+
+# Output directory for all results
+output_dir: /path/to/output/directory
+
+# Pipeline mode (do not change for earlGreyParTEA)
+pipeline_mode: "full"
+
+# Initial masking with known repeats (choose ONE or leave both empty)
+repeatmasker_species: ""  # e.g., "fungi", "arthropoda", "viridiplantae"
+custom_library: ""        # path to custom TE library in fasta format
+
+# Library construction parameters
+iterations: 10           # Number of BLAST-extend-align cycles
+flank: 1000             # Flanking basepairs to extract
+max_consensus_seqs: 20  # Max sequences for consensus building
+min_consensus_seqs: 3   # Min sequences required for consensus
+
+# Clustering options (for combining TE libraries from multiple genomes)
+skip_clustering: false          # Set to true to skip clustering (just concatenate)
+clustering_identity: 0.8        # cd-hit sequence identity threshold (0.0-1.0)
+clustering_coverage: 0.8        # cd-hit alignment coverage (0.0-1.0)
+
+# Output options
+softmask: false         # Generate softmasked genome for each input
+margin: false           # Remove short TE sequences (<100bp)
+run_heliano: true       # Run HELIANO for Helitron detection
+
+# Workflow visualization (requires graphviz/dot installed)
+generate_dag: true      # Generate workflow DAG visualizations
+dag_format: "svg"       # Options: "svg", "png", "pdf"
+
+# Advanced options (usually not needed)
+# script_dir: "/path/to/earlgrey/scripts"  # Auto-detected if installed via conda/mamba
+EOF
+    echo "[INFO] Example config file generated: $output_file"
+    echo "[INFO] Edit this file with your genome paths and parameters before running"
+    exit 0
+}
+
+# Parse arguments
+CONFIG=""
+THREADS=""
+MEMORY=""
+DRY_RUN=""
+UNLOCK=""
+RERUN=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -c|--config)
+            CONFIG="$2"
+            shift 2
+            ;;
+        -t|--threads)
+            THREADS="$2"
+            shift 2
+            ;;
+        -m|--memory)
+            MEMORY="$2"
+            shift 2
+            ;;
+        -n|--dry-run)
+            DRY_RUN="--dry-run"
+            shift
+            ;;
+        --generate-config)
+            generate_example_config "$2"
+            ;;
+        --unlock)
+            UNLOCK="--unlock"
+            shift
+            ;;
+        --rerun-incomplete)
+            RERUN="--rerun-incomplete"
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "[ERROR] Unknown option: $1"
+            usage
+            exit 1
+            ;;
+    esac
+done
+
+# Validate required arguments
+if [ -z "$CONFIG" ]; then
+    echo "[ERROR] Config file required (-c/--config)"
+    echo ""
+    usage
+    exit 1
+fi
+
+if [ -z "$THREADS" ]; then
+    echo "[ERROR] Number of threads required (-t/--threads)"
+    echo ""
+    usage
+    exit 1
+fi
+
+if [ ! -f "$CONFIG" ]; then
+    echo "[ERROR] Config file not found: $CONFIG"
+    exit 1
+fi
+
+# Find Snakefile (check multiple possible locations, version-agnostic)
+SNAKEFILE=""
+POSSIBLE_LOCATIONS=()
+
+# Check for versioned earlgrey installations in CONDA_PREFIX
+if [ -n "$CONDA_PREFIX" ] && [ -d "$CONDA_PREFIX/share" ]; then
+    # Find all earlgrey-* directories (any version)
+    for earlgrey_dir in "$CONDA_PREFIX/share/earlgrey"-*; do
+        if [ -d "$earlgrey_dir" ]; then
+            POSSIBLE_LOCATIONS+=("$earlgrey_dir/pangenome/Snakefile")
+        fi
+    done
+    # Also check generic earlgrey directory (no version)
+    POSSIBLE_LOCATIONS+=("$CONDA_PREFIX/share/earlgrey/pangenome/Snakefile")
+fi
+
+# Check relative to script location (for development or custom installs)
+POSSIBLE_LOCATIONS+=(
+    "$SCRIPT_DIR/../share/earlgrey/pangenome/Snakefile"
+    "$SCRIPT_DIR/pangenome/Snakefile"
+    "$SCRIPT_DIR/../Snakefile"
+    "$SCRIPT_DIR/Snakefile"
+    "$(dirname "$SCRIPT_DIR")/Snakefile"
+)
+
+for location in "${POSSIBLE_LOCATIONS[@]}"; do
+    if [ -f "$location" ]; then
+        SNAKEFILE="$location"
+        break
+    fi
+done
+
+if [ -z "$SNAKEFILE" ]; then
+    echo "[ERROR] Could not locate Snakefile. Please ensure EarlGrey is properly installed."
+    echo "[ERROR] Searched locations:"
+    for loc in "${POSSIBLE_LOCATIONS[@]}"; do
+        echo "        $loc"
+    done
+    exit 1
+fi
+
+echo "[INFO] Using Snakefile: $SNAKEFILE"
+echo "[INFO] Using config: $CONFIG"
+echo "[INFO] Threads: $THREADS"
+
+# Build snakemake command
+SNAKEMAKE_CMD="snakemake --snakefile $SNAKEFILE --configfile $CONFIG --cores $THREADS"
+
+if [ -n "$MEMORY" ]; then
+    SNAKEMAKE_CMD="$SNAKEMAKE_CMD --resources mem_mb=$MEMORY"
+    echo "[INFO] Memory limit: ${MEMORY}MB"
+fi
+
+if [ -n "$DRY_RUN" ]; then
+    SNAKEMAKE_CMD="$SNAKEMAKE_CMD $DRY_RUN"
+    echo "[INFO] Performing dry run"
+fi
+
+if [ -n "$UNLOCK" ]; then
+    SNAKEMAKE_CMD="$SNAKEMAKE_CMD $UNLOCK"
+    echo "[INFO] Unlocking working directory"
+fi
+
+if [ -n "$RERUN" ]; then
+    SNAKEMAKE_CMD="$SNAKEMAKE_CMD $RERUN"
+    echo "[INFO] Rerunning incomplete jobs"
+fi
+
+# Execute
+echo ""
+echo "Executing: $SNAKEMAKE_CMD"
+echo ""
+
+exec $SNAKEMAKE_CMD

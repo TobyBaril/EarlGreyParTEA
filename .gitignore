@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+
+# Snakemake
+.snakemake/
+*.snakemake_timestamp
+
+# Test outputs
+test/results/
+test/unit_test_*/
+!test/*.yaml
+!test/*.txt
+!test/*.fasta
+
+# Temporary files
+*.tmp
+*.log
+*.swp
+*~
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated files
+final_test.yaml
+test_*.yaml

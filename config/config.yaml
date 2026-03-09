@@ -1,0 +1,38 @@
+# EarlGrey Pangenome Pipeline Configuration
+# Run with: snakemake --cores N (where N = number of cores to use)
+# Example: snakemake --cores 16
+
+# Pipeline mode selection
+pipeline_mode: "full"  # Options: "full" (complete pipeline), "libconstruct" (library only), "annotate" (annotation only)
+annotation_library: ""  # Path to pre-made library (only for "annotate" mode)
+
+genome:
+  IPO323: /data/toby/EarlGrey_pangenome/test/IPO323.fa
+  1A5: /data/toby/EarlGrey_pangenome/test/1A5.fa
+species: [IPO323, 1A5]
+output_dir: /data/toby/EarlGrey_pangenome/test/unit_test_11_DYNAMIC_THREADS
+repeatmasker_species: ""  # e.g. "arthropoda" or "" for none
+custom_library: ""        # path to custom library or "" for none
+iterations: 10
+flank: 1000
+max_consensus_seqs: 20
+min_consensus_seqs: 3
+
+# Clustering options (for combining TE libraries from multiple genomes)
+skip_clustering: False  # Set to True to skip clustering (just concatenate all libraries)
+clustering_identity: 0.8  # cd-hit sequence identity threshold (0.0-1.0, default 0.8)
+clustering_coverage: 0.8  # cd-hit alignment coverage for shorter sequence (0.0-1.0, default 0.8)
+
+# Output options
+softmask: False  # Set to True to generate softmasked genome for each input
+margin: False  # Set to True to remove short TE sequences (<100bp)
+
+# Workflow visualization (requires graphviz/dot installed)
+generate_dag: True  # Set to False to skip DAG generation
+dag_format: "svg"  # Options: "svg", "png", "pdf"
+
+# Advanced: EarlGrey script directory (auto-detected if not specified)
+# Only set this if you have a custom EarlGrey installation
+# script_dir: /path/to/earlgrey/scripts
+
+run_heliano: True
