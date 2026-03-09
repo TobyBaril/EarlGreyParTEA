@@ -181,22 +181,19 @@ fi
 SNAKEFILE=""
 POSSIBLE_LOCATIONS=()
 
-# Check for versioned earlgrey installations in CONDA_PREFIX
+# Check for conda package installation
 if [ -n "$CONDA_PREFIX" ] && [ -d "$CONDA_PREFIX/share" ]; then
-    # Find all earlgrey-* directories (any version)
-    for earlgrey_dir in "$CONDA_PREFIX/share/earlgrey"-*; do
-        if [ -d "$earlgrey_dir" ]; then
-            POSSIBLE_LOCATIONS+=("$earlgrey_dir/pangenome/Snakefile")
+    # Find all earlgrey-partea-* directories (any version)
+    for partea_dir in "$CONDA_PREFIX/share/earlgrey-partea"-*; do
+        if [ -d "$partea_dir" ]; then
+            POSSIBLE_LOCATIONS+=("$partea_dir/Snakefile")
         fi
     done
-    # Also check generic earlgrey directory (no version)
-    POSSIBLE_LOCATIONS+=("$CONDA_PREFIX/share/earlgrey/pangenome/Snakefile")
 fi
 
 # Check relative to script location (for development or custom installs)
 POSSIBLE_LOCATIONS+=(
-    "$SCRIPT_DIR/../share/earlgrey/pangenome/Snakefile"
-    "$SCRIPT_DIR/pangenome/Snakefile"
+    "$SCRIPT_DIR/../share/earlgrey-partea/Snakefile"
     "$SCRIPT_DIR/../Snakefile"
     "$SCRIPT_DIR/Snakefile"
     "$(dirname "$SCRIPT_DIR")/Snakefile"

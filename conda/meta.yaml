@@ -1,5 +1,5 @@
 {% set name = "earlgrey-partea" %}
-{% set version = "1.0.0" %}
+{% set version = "0.0.1" %}
 
 package:
   name: {{ name|lower }}
@@ -7,7 +7,7 @@ package:
 
 source:
   url: https://github.com/TobyBaril/EarlGreyParTEA/archive/refs/tags/v{{ version }}.tar.gz
-  sha256: YOUR_SHA256_HERE
+  sha256: c839fb9d93e8a024f1382cb0c77c72c84bf4ea28b942337e91359225739f7b73
 
 build:
   number: 0
