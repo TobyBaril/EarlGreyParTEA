@@ -348,6 +348,15 @@ Or disable DAG generation in config:
 generate_dag: false
 ```
 
+## Additional Documentation
+
+For technical details, packaging information, and implementation documentation, see the [docs/](docs/) directory:
+
+- **[Packaging Guide](docs/PACKAGING.md)** - Conda/mamba package creation and setup
+- **[Version Compatibility](docs/VERSION_COMPATIBILITY.md)** - How version-agnostic detection works
+- **[Auto-Detection](docs/AUTO_DETECTION.md)** - Implementation details for script_dir auto-detection
+- **[DAG Visualization](docs/DAG_VISUALIZATION.md)** - Understanding workflow visualizations
+
 ## Citation
 
 If you use this pipeline, please cite:
@@ -362,4 +371,4 @@ Baril, T., Galbraith, J. and Hayward, A., 2024. Earl Grey: a fully automated use
 
 ## License
 
-See LICENSE file in the EarlGrey repository.
+This project is distributed under the same license as EarlGrey. See the [LICENSE](LICENSE) file for details.
