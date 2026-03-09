@@ -22,7 +22,7 @@ ParTEA (**Pan**genome **T**ransposable **E**lement **A**nalysis) is a Snakemake-
 **Why ParTEA?**
 - 🎊 **Parallel Processing**: Analyze multiple genomes simultaneously
 - 🧬 **Pangenome Libraries**: Build consensus TE libraries across species
-- 🔄 **Smart Clustering**: Merge TEs using cd-hit for comprehensive coverage
+- 🔄 **Optional Clustering**: Merge TE libraries using cd-hit for consistent and traceable naming in annotations across all genomes
 - 📊 **Rich Outputs**: Get annotations, divergence metrics, and visualizations
 - ⚡ **Dynamic Threading**: Automatically optimizes resource allocation
 - 🔍 **Version-Agnostic**: Works seamlessly with any EarlGrey version
@@ -305,10 +305,10 @@ earlGreyParTEA -c config.yaml -t 16 --dry-run
 ## 🎟️ Requirements
 
 **To join the parTEA, you'll need:**
-- Snakemake ≥7.0 (the DJ 🎵)
-- Python ≥3.9 (the host 🎤)
-- EarlGrey dependencies (the decorations - installed automatically! 🎈)
-- Graphviz (optional - for prettier workflow visualizations 📊)
+- Snakemake ≥7.0 
+- Python ≥3.9
+- EarlGrey dependencies
+- Graphviz
 
 ## Troubleshooting
 
