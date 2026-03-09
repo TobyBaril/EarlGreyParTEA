@@ -1,25 +1,49 @@
+<div align="center">
+
+![ParTEA Logo](parTEALogo.png)
+
 # EarlGrey Pangenome Pipeline (ParTEA)
 
-> **Repository:** https://github.com/TobyBaril/EarlGreyParTEA  
-> **Depends on:** [EarlGrey](https://github.com/TobyBaril/EarlGrey) ≥7.0.3
+### 🎉 *Multiple genomes? Time for a parTEA!* 🎉
 
-A Snakemake-based multi-genome transposable element analysis pipeline for building pangenome TE libraries and performing comparative TE annotation across multiple genomes.
+**Because analyzing transposable elements across genomes should be a parTEA, not a chore.**
 
-## Installation
+[![Repository](https://img.shields.io/badge/GitHub-EarlGreyParTEA-blue)](https://github.com/TobyBaril/EarlGreyParTEA)
+[![Dependency](https://img.shields.io/badge/Depends%20on-EarlGrey%20%E2%89%A57.0.3-green)](https://github.com/TobyBaril/EarlGrey)
 
-### Via conda/mamba (recommended)
+</div>
+
+---
+
+## What is ParTEA?
+
+ParTEA (**Pan**genome **T**ransposable **E**lement **A**nalysis) is a Snakemake-based pipeline that brings the party to multi-genome TE annotation! It extends [EarlGrey](https://github.com/TobyBaril/EarlGrey) to process multiple genomes in parallel, build pangenome TE libraries, and perform comparative transposable element analysis across species.
+
+**Why ParTEA?**
+- 🎊 **Parallel Processing**: Analyze multiple genomes simultaneously
+- 🧬 **Pangenome Libraries**: Build consensus TE libraries across species
+- 🔄 **Smart Clustering**: Merge TEs using cd-hit for comprehensive coverage
+- 📊 **Rich Outputs**: Get annotations, divergence metrics, and visualizations
+- ⚡ **Dynamic Threading**: Automatically optimizes resource allocation
+- 🔍 **Version-Agnostic**: Works seamlessly with any EarlGrey version
+
+
+
+## 📦 Installation
+
+### Via conda/mamba (recommended) - *Party in a Package!*
 
 ```bash
-# Install earlgrey-partea (automatically installs earlgrey as dependency)
+# Install earlgrey-partea (EarlGrey comes along for the ride!)
 mamba install -c conda-forge -c bioconda earlgrey-partea
 
-# Verify installation
+# Make sure everything's ready to party
 earlGreyParTEA --help
 ```
 
-**Version Compatibility**: ParTEA automatically detects installed EarlGrey versions (7.x, 8.x, or higher) and requires no configuration changes when EarlGrey is updated.
+**✨ Magic Feature:** ParTEA automatically detects your EarlGrey installation (any version 7.x, 8.x, or higher) and adapts on the fly. Update EarlGrey anytime - no config changes needed!
 
-### Development Installation
+### Development Installation - *For the DIY ParTEA Planners*
 
 ```bash
 git clone https://github.com/TobyBaril/EarlGreyParTEA.git
@@ -28,15 +52,17 @@ chmod +x earlGreyParTEA*
 export PATH="$PWD:$PATH"
 ```
 
-## Quick Start
+## 🚀 Quick Start
 
-### 1. Generate a config file
+### Three simple steps to get the parTEA started!
+
+**1️⃣ Generate a config file**
 
 ```bash
 earlGreyParTEA --generate-config my_config.yaml
 ```
 
-### 2. Edit the config file with your genome paths
+**2️⃣ Add your genomes** (the more, the merrier!)
 
 ```yaml
 genome:
@@ -52,44 +78,56 @@ species:
 output_dir: /path/to/output
 ```
 
-### 3. Run the pipeline
+**3️⃣ Let the parTEA begin!**
 
 ```bash
 earlGreyParTEA -c my_config.yaml -t 16
 ```
 
-## Pipeline Modes
+## 🎭 Pipeline Modes
 
-### Full Pipeline (`earlGreyParTEA`)
+ParTEA offers three ways to party - choose your adventure!
 
-Runs the complete analysis: library construction → clustering → annotation
+### 🎊 Full Pipeline (`earlGreyParTEA`)
+**The complete parTEA experience!** 
+
+Runs the full celebration: library construction → clustering → annotation
 
 ```bash
 earlGreyParTEA -c config.yaml -t 16
 ```
 
-**Output:**
-- Pangenome TE library (clustered across all genomes)
-- TE annotations for each genome (BED, GFF)
-- Divergence analysis
-- Summary charts and statistics
+**What you get:**
+- 🧬 Pangenome TE library (clustered across all genomes)
+- 📍 TE annotations for each genome (BED, GFF)
+- 📊 Divergence analysis and landscape plots
+- 📈 Summary charts and statistics
+- 🎨 Workflow visualizations
 
-### Library Construction Only (`earlGreyParTEA_LibConstruct`)
+**Perfect for:** Complete comparative TE analysis across multiple species
 
-Builds a pangenome TE library without performing annotation.
+---
+
+### 🏗️ Library Construction Only (`earlGreyParTEA_LibConstruct`)
+**Build the guest list!**
+
+Creates a pangenome TE library without annotation.
 
 ```bash
 earlGreyParTEA_LibConstruct -c config.yaml -t 16
 ```
 
-**Output:**
-- `{output_dir}/combinedLibraries/combined_all_species.clstrd.fa`
+**What you get:**
+- 📚 `{output_dir}/combinedLibraries/combined_all_species.clstrd.fa`
 
-**Use case:** Build a TE library from multiple genomes to use for annotating other genomes.
+**Perfect for:** Building a curated TE library to annotate other genomes later
 
-### Annotation Only (`earlGreyParTEA_AnnotationOnly`)
+---
 
-Annotates genomes using a pre-existing TE library (skips library construction).
+### 🎯 Annotation Only (`earlGreyParTEA_AnnotationOnly`)
+**Use an existing playlist!**
+
+Annotates genomes using a pre-made TE library (bring your own TEs).
 
 ```bash
 earlGreyParTEA_AnnotationOnly -c config.yaml -t 16
@@ -247,28 +285,30 @@ earlGreyParTEA_AnnotationOnly -c annotate.yaml -t 16
 earlGreyParTEA -c config.yaml -t 16 --dry-run
 ```
 
-## Dynamic Resource Allocation
+## ⚡ Dynamic Resource Allocation
 
-The pipeline automatically distributes threads across genomes:
+**ParTEA knows how to share!** The pipeline automatically distributes computing power across your genomes:
 
-| Cores | Genomes | Threads/Genome | Parallel Jobs |
-|-------|---------|----------------|---------------|
-| 8     | 2       | 4              | 2 genomes     |
-| 16    | 4       | 4              | 4 genomes     |
-| 32    | 2       | 16             | 2 genomes     |
-| 64    | 8       | 8              | 8 genomes     |
+| Cores | Genomes | Threads/Genome | Parallel Jobs | Party Size |
+|-------|---------|----------------|---------------|------------|
+| 8     | 2       | 4              | 2 genomes     | Intimate 🥂 |
+| 16    | 4       | 4              | 4 genomes     | Cozy 🎵 |
+| 32    | 2       | 16             | 2 genomes     | Focused 🎯 |
+| 64    | 8       | 8              | 8 genomes     | Epic 🎆 |
 
-The pipeline maximizes efficiency by:
-- Running multiple genomes in parallel when cores available
-- Using fewer threads per genome when many genomes analyzed
-- Capping threads at optimal levels for each tool
+**Smart scaling means:**
+- 🎊 Multiple genomes party together when you have the cores
+- 🎪 Fair sharing - everyone gets their turn on the dance floor
+- 🎨 Optimal thread allocation prevents bottlenecks
+- 🚀 Maximum throughput with minimal wait time
 
-## Requirements
+## 🎟️ Requirements
 
-- Snakemake ≥7.0
-- Python ≥3.9
-- EarlGrey dependencies (installed automatically with conda/mamba)
-- Graphviz (optional, for DAG visualization)
+**To join the parTEA, you'll need:**
+- Snakemake ≥7.0 (the DJ 🎵)
+- Python ≥3.9 (the host 🎤)
+- EarlGrey dependencies (the decorations - installed automatically! 🎈)
+- Graphviz (optional - for prettier workflow visualizations 📊)
 
 ## Troubleshooting
 
