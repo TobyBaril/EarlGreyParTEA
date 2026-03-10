@@ -291,6 +291,51 @@ def validate_parameters(config, outfile = None):
         msg_error(f"TEstrainer module not found in {config['script_dir']}. Please ensure EarlGrey is properly installed.")
 
     # --------------------------------------------------
+    # EarlGrey configuration check
+    # --------------------------------------------------
+    msg_header("EarlGrey configuration check")
+    
+    try:
+        # Get RepeatMasker path
+        import subprocess
+        rm_result = subprocess.run(["which", "RepeatMasker"], 
+                                  capture_output=True, text=True, check=True)
+        rm_path = rm_result.stdout.strip()
+        library_path = rm_path.replace("/bin/RepeatMasker", "/share/RepeatMasker/Libraries/famdb")
+        
+        if not os.path.isdir(library_path):
+            msg_error(f"RepeatMasker famdb directory not found: {library_path}\nPlease ensure RepeatMasker is properly installed.")
+        
+        # Check for configuration completion marker
+        complete_marker = os.path.join(library_path, ".earlgrey.config.complete")
+        
+        if not os.path.exists(complete_marker):
+            # Check if library has been configured (should have more than just partition 0)
+            h5_files = [f for f in os.listdir(library_path) if f.endswith('.h5') and 'dfam39_full' in f]
+            
+            if len(h5_files) <= 1:
+                # Generate helpful configuration script
+                generate_dfam39_config_script(library_path, rm_path)
+                msg_error(
+                    "\nEarlGrey RepeatMasker libraries not configured!\n"
+                    f"Found only {len(h5_files)} Dfam partition file(s) in {library_path}\n"
+                    "A configuration script has been generated: configure_dfam39.sh\n"
+                    "Edit and then run it to download Dfam partitions and configure RepeatMasker:\n"
+                    "  chmod +x configure_dfam39.sh && ./configure_dfam39.sh"
+                )
+            else:
+                msg_warn(f"Found {len(h5_files)} Dfam partition files but no completion marker.")
+                msg_info("If RepeatMasker is configured correctly, create marker with:")
+                msg_info(f"  touch {complete_marker}")
+        else:
+            msg_info("EarlGrey configuration marker found - RepeatMasker libraries configured")
+            
+    except subprocess.CalledProcessError:
+        msg_warn("Could not locate RepeatMasker installation - skipping library check")
+    except Exception as e:
+        msg_warn(f"Error checking EarlGrey configuration: {e}")
+
+    # --------------------------------------------------
     # Output setup
     # --------------------------------------------------
     msg_header("Output setup")
@@ -337,61 +382,6 @@ def make_directories(directory, species, RepSpec=None, startCust=None, run_helia
     if run_heliano:
         os.makedirs(os.path.join(outdir, f"{species}_heliano"), exist_ok=True)
     return outdir
-
-#CHECK WITH TOBY: Should this be in the pangenome pipeline? 
-# Or is this part of what gets set up by first running EarlGrey normally?
-def check_biocontainer():
-    """Check and configure biocontainer installation if needed"""
-    repeatmasker_lib = "/usr/local/share/RepeatMasker/Libraries/"
-    dfam_file = os.path.join(repeatmasker_lib, "Dfam.h5")
-    
-    if os.path.isdir(repeatmasker_lib) and os.path.isfile(dfam_file):
-        try:
-            with open(dfam_file, 'r') as f:
-                content = f.read()
-                if "Placeholder" in content:
-                    response = input("Are you using the biocontainer installation? If yes, we can configure RepeatMasker to work for you:[YyNn]")
-                    if response.lower() in ['y', 'yes']:
-                        configure_biocontainer(repeatmasker_lib)
-                    else:
-                        sys.exit(0)
-        except Exception as e:
-            print(f"Warning: Could not read Dfam.h5 file: {e}")
-
-def configure_biocontainer(lib_path):
-    """Configure biocontainer RepeatMasker installation"""
-    try:
-        os.chdir(lib_path)
-        
-        # Download Dfam database
-        print("Downloading Dfam database...")
-        urllib.request.urlretrieve(
-            "https://dfam.org/releases/Dfam_3.7/families/Dfam_curatedonly.h5.gz",
-            "Dfam_curatedonly.h5.gz"
-        )
-        
-        # Extract and replace
-        subprocess.run(["gunzip", "Dfam_curatedonly.h5.gz"], check=True)
-        if os.path.exists("Dfam.h5"):
-            os.rename("Dfam.h5", "Dfam.h5.bak")
-        os.rename("Dfam_curatedonly.h5", "Dfam.h5")
-        
-        # Configure RepeatMasker
-        os.chdir("/usr/local/share/RepeatMasker/")
-        subprocess.run([
-            "perl", "configure",
-            "-rmblast_dir=/usr/local/bin",
-            "-libdir=/usr/local/share/RepeatMasker/Libraries",
-            "-trf_prgm=/usr/local/bin/trf",
-            "-default_search_engine=rmblast"
-        ], check=True)
-        
-        print("Biocontainer configuration completed successfully")
-        
-    except Exception as e:
-        print(f"Error configuring biocontainer: {e}")
-        sys.exit(1)
-
 
 #CHECK WITH TOBY: Should this be in the pangenome pipeline? 
 # Or is this part of what gets set up by first running EarlGrey normally?
