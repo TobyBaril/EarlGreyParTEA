@@ -109,30 +109,87 @@ ParTEA orchestrates TE analysis across multiple genomes with smart parallelizati
 
 ## 📦 Installation
 
-### Prerequisites
-
-First, install EarlGrey (≥7.0.3) following the [EarlGrey installation guide](https://github.com/TobyBaril/EarlGrey#installation).
-
-### Via conda/mamba (coming soon) - *Party in a Package!*
+### Via conda/mamba (Recommended) - *Party in a Package!*
 
 ```bash
 # Install earlgrey-partea (EarlGrey comes along for the ride!)
-# Note: Not yet available on bioconda - coming soon!
 mamba install -c conda-forge -c bioconda earlgrey-partea
 
 # Make sure everything's ready to party
 earlGreyParTEA --help
 ```
 
-**✨ Magic Feature:** ParTEA automatically detects your EarlGrey installation (any version 7.x, 8.x, or higher) and adapts on the fly. Update EarlGrey anytime - no config changes needed!
+**✨ Magic Feature:** ParTEA automatically detects your EarlGrey installation (any version ≥7.0.3) and adapts on the fly. Update EarlGrey anytime - no config changes needed!
 
-### Manual Installation (current method) - *For the DIY ParTEA Planners*
+### Manual Installation - *For the DIY ParTEA Planners*
 
 ```bash
 git clone https://github.com/TobyBaril/EarlGreyParTEA.git
 cd EarlGreyParTEA
 chmod +x earlGreyParTEA*
 export PATH="$PWD:$PATH"
+```
+
+### ⚠️ IMPORTANT: Configure EarlGrey Before Running ParTEA
+
+**ParTEA requires EarlGrey to be properly configured with Dfam library partitions.** The pipeline will check for this and fail with helpful instructions if not configured.
+
+After installing EarlGrey (via conda or manually), you **must** download additional Dfam partitions:
+
+```bash
+# Activate your environment
+mamba activate partea  # or your environment name
+
+# Check your RepeatMasker library location
+which RepeatMasker
+
+# Download Dfam partitions (this may take a while)
+# The pipeline will generate a configuration script for you if this step is missing
+```
+
+**What happens if you skip this?**
+
+ParTEA will detect the missing configuration and:
+1. ✋ Stop the pipeline before wasting compute time
+2. 📝 Generate a configuration script: `configure_dfam39.sh`
+3. 📋 Provide clear instructions to fix the issue
+
+**To configure manually:**
+
+When EarlGrey is first installed, only Dfam partition 0 is included. For comprehensive TE annotation, download partitions 0-16:
+
+```bash
+# Navigate to your RepeatMasker famdb directory
+cd $CONDA_PREFIX/share/RepeatMasker/Libraries/famdb/
+
+# Download all partitions (0-16)
+curl -o 'dfam39_full.#1.h5.gz' 'https://dfam.org/releases/current/families/FamDB/dfam39_full.[0-16].h5.gz'
+
+# Decompress
+gunzip *.gz
+
+# Reconfigure RepeatMasker
+cd $CONDA_PREFIX/share/RepeatMasker/
+perl ./configure \
+    -libdir $CONDA_PREFIX/share/RepeatMasker/Libraries \
+    -trf_prgm $CONDA_PREFIX/bin/trf \
+    -rmblast_dir $CONDA_PREFIX/bin \
+    -hmmer_dir $CONDA_PREFIX/bin \
+    -default_search_engine rmblast
+
+# Mark configuration as complete
+touch $CONDA_PREFIX/share/RepeatMasker/Libraries/famdb/.earlgrey.config.complete
+```
+
+**Verification:**
+
+```bash
+# The pipeline will automatically check this on startup
+# You can also verify manually:
+ls -lh $CONDA_PREFIX/share/RepeatMasker/Libraries/famdb/
+
+# Should see multiple dfam39_full.*.h5 files (not just partition 0)
+# Should see .earlgrey.config.complete marker file
 ```
 
 ## 🚀 Quick Start
@@ -383,18 +440,47 @@ earlGreyParTEA -c config.yaml -t 16 --dry-run
 - 🎊 Multiple genomes party together when you have the cores
 - 🎪 Fair sharing - everyone gets their turn on the dance floor
 - 🎨 Optimal thread allocation prevents bottlenecks
-- EarlGrey ≥7.0.3 (with all dependencies)
+
+## Requirements
+
+**To join the parTEA, you'll need:**
+- EarlGrey ≥7.0.3 (with all dependencies) **+ configured with Dfam partitions**
 - Snakemake ≥7.0,<8.0
 - Python ≥3.9,<3.11
 - cd-hit (for clustering)
 - Graphviz (optional, for DAG visualization)
-**To join the parTEA, you'll need:**
-- Snakemake ≥7.0 
-- Python ≥3.9
-- EarlGrey dependencies
-- Graphviz
+
+**⚠️ Critical:** EarlGrey must be configured with Dfam library partitions before running ParTEA. See the [Installation](#-installation) section for configuration instructions. The pipeline will check this automatically and guide you if configuration is missing.
 
 ## Troubleshooting
+
+### Error: "EarlGrey RepeatMasker libraries not configured!"
+
+This is the most common issue - ParTEA detected that EarlGrey is missing required Dfam partitions.
+
+**Solution:**
+
+The pipeline automatically generates a configuration script for you. Simply run:
+
+```bash
+chmod +x configure_dfam39.sh
+./configure_dfam39.sh
+```
+
+Or follow the manual configuration steps in the [Installation](#-installation) section above.
+
+**Why does this happen?**
+
+- Fresh EarlGrey installations only include Dfam partition 0 (minimal database)
+- Full TE annotation requires partitions 0-16 for comprehensive coverage
+- The download is ~10GB and takes time, so it's not included by default
+
+**After configuring:**
+
+Re-run your ParTEA command and it will proceed normally:
+```bash
+earlGreyParTEA -c config.yaml -t 16
+```
 
 ### Error: "Config file required"
 
