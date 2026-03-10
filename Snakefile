@@ -6,8 +6,6 @@ from scripts.on_start_functions import (
     running_tea, 
     validate_parameters,
     make_directories,
-    check_biocontainer,
-    check_dfam39,
 )
 from scripts.generate_dag import generate_dag
 

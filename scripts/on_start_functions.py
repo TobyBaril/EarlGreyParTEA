@@ -383,42 +383,6 @@ def make_directories(directory, species, RepSpec=None, startCust=None, run_helia
         os.makedirs(os.path.join(outdir, f"{species}_heliano"), exist_ok=True)
     return outdir
 
-#CHECK WITH TOBY: Should this be in the pangenome pipeline? 
-# Or is this part of what gets set up by first running EarlGrey normally?
-def check_dfam39():
-    """Check for Dfam 3.9 configuration requirements"""
-    try:
-        # Get RepeatMasker path
-        rm_path = subprocess.run(["which", "RepeatMasker"], 
-                                capture_output=True, text=True, check=True).stdout.strip()
-        library_path = rm_path.replace("/bin/RepeatMasker", "/share/RepeatMasker/Libraries/famdb")
-        
-        expected_file = os.path.join(library_path, "dfam39_full.0.h5")
-        config_file = os.path.join(library_path, "rmlib.config")
-        complete_marker = os.path.join(library_path, ".earlgrey.config.complete")
-        
-        # Check if configuration is needed
-        #Check with Toby should these be "OR" instead of "AND"? Should there be a more complex check?
-        if (os.path.isdir(library_path) and 
-            len([f for f in os.listdir(library_path) if os.path.isfile(os.path.join(library_path, f))]) == 2 and
-            os.path.isfile(expected_file) and 
-            os.path.isfile(config_file) and
-            not os.path.exists(complete_marker)):
-            
-            generate_dfam39_config_script(library_path, rm_path)
-            sys.exit(2)
-        #Check with Toby for the following
-        #else :
-        #    open(complete_marker, "w").close()
-        return complete_marker
-            
-    except subprocess.CalledProcessError:
-        print("Warning: Could not locate RepeatMasker installation")
-    except Exception as e:
-        print(f"Warning: Error checking Dfam 3.9 configuration: {e}")
-
-#CHECK WITH TOBY: Should this be in the pangenome pipeline? 
-# Or is this part of what gets set up by first running EarlGrey normally?
 def generate_dfam39_config_script(library_path, rm_path):
     """Generate configuration script for Dfam 3.9"""
     script_path = os.path.join(os.getcwd(), "configure_dfam39.sh")
