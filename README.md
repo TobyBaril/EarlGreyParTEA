@@ -43,7 +43,7 @@ ParTEA orchestrates TE analysis across multiple genomes with smart parallelizati
 
 ```
                     ┌─────────────────────────────────────┐
-                    │   Input: Multiple Genome FASTAs    │
+                    │   Input: Multiple Genome FASTAs     │
                     └──────────────┬──────────────────────┘
                                    │
                     ┌──────────────▼──────────────────────┐
