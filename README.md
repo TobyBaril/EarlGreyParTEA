@@ -27,14 +27,27 @@ ParTEA (**Pan**genome **T**ransposable **E**lement **A**nalysis) is a Snakemake-
 - ⚡ **Dynamic Threading**: Automatically optimizes resource allocation
 - 🔍 **Version-Agnostic**: Works seamlessly with any EarlGrey version
 
+## 📖 Citation
+
+**If you use ParTEA in your research, please cite:**
+
+Baril, T., Galbraith, J. and Hayward, A., 2024. Earl Grey: a fully automated user-friendly transposable element annotation and analysis pipeline. *Molecular Biology and Evolution*, 41(4), p.msae068.
+
+*ParTEA manuscript in preparation.*
+
 
 
 ## 📦 Installation
 
-### Via conda/mamba (recommended) - *Party in a Package!*
+### Prerequisites
+
+First, install EarlGrey (≥7.0.3) following the [EarlGrey installation guide](https://github.com/TobyBaril/EarlGrey#installation).
+
+### Via conda/mamba (coming soon) - *Party in a Package!*
 
 ```bash
 # Install earlgrey-partea (EarlGrey comes along for the ride!)
+# Note: Not yet available on bioconda - coming soon!
 mamba install -c conda-forge -c bioconda earlgrey-partea
 
 # Make sure everything's ready to party
@@ -43,7 +56,7 @@ earlGreyParTEA --help
 
 **✨ Magic Feature:** ParTEA automatically detects your EarlGrey installation (any version 7.x, 8.x, or higher) and adapts on the fly. Update EarlGrey anytime - no config changes needed!
 
-### Development Installation - *For the DIY ParTEA Planners*
+### Manual Installation (current method) - *For the DIY ParTEA Planners*
 
 ```bash
 git clone https://github.com/TobyBaril/EarlGreyParTEA.git
@@ -300,10 +313,11 @@ earlGreyParTEA -c config.yaml -t 16 --dry-run
 - 🎊 Multiple genomes party together when you have the cores
 - 🎪 Fair sharing - everyone gets their turn on the dance floor
 - 🎨 Optimal thread allocation prevents bottlenecks
-- 🚀 Maximum throughput with minimal wait time
-
-## 🎟️ Requirements
-
+- EarlGrey ≥7.0.3 (with all dependencies)
+- Snakemake ≥7.0,<8.0
+- Python ≥3.9,<3.11
+- cd-hit (for clustering)
+- Graphviz (optional, for DAG visualization)
 **To join the parTEA, you'll need:**
 - Snakemake ≥7.0 
 - Python ≥3.9
@@ -396,17 +410,14 @@ For technical details, packaging information, and implementation documentation, 
 - **[Version Compatibility](docs/VERSION_COMPATIBILITY.md)** - How version-agnostic detection works
 - **[Auto-Detection](docs/AUTO_DETECTION.md)** - Implementation details for script_dir auto-detection
 - **[DAG Visualization](docs/DAG_VISUALIZATION.md)** - Understanding workflow visualizations
+Support & Contributing
 
-## Citation
+- 🐛 **Bug Reports**: [Open an issue](https://github.com/TobyBaril/EarlGreyParTEA/issues/new?template=bug_report.md)
+- 💡 **Feature Requests**: [Suggest a feature](https://github.com/TobyBaril/EarlGreyParTEA/issues/new?template=feature_request.md)
+- 📧 **Email**: tobias.baril[at]unine.ch
+- 📚 **Documentation**: [Technical docs](https://github.com/TobyBaril/EarlGreyParTEA/tree/main/docs)
 
-If you use this pipeline, please cite:
-
-Baril, T., Galbraith, J. and Hayward, A., 2024. Earl Grey: a fully automated user-friendly transposable element annotation and analysis pipeline. *Molecular Biology and Evolution*, 41(4), p.msae068.
-
-## Support
-
-- GitHub Issues: https://github.com/TobyBaril/EarlGreyParTEA/issues
-- Email: tobias.baril[at]unine.ch
+**Found ParTEA useful?** Give us a ⭐ on GitHub!
 - Documentation: https://github.com/TobyBaril/EarlGreyParTEA
 
 ## License

@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 General Questions
+    url: https://github.com/TobyBaril/EarlGreyParTEA/discussions
+    about: Ask questions and discuss ParTEA with the community
+  - name: 📚 Documentation
+    url: https://github.com/TobyBaril/EarlGreyParTEA#readme
+    about: Check the README and technical documentation
+  - name: 🔬 EarlGrey Issues
+    url: https://github.com/TobyBaril/EarlGrey/issues
+    about: For issues with EarlGrey itself (not the ParTEA pipeline)
