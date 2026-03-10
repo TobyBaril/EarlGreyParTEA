@@ -37,7 +37,34 @@ Baril, T., Galbraith, J. and Hayward, A., 2024. Earl Grey: a fully automated use
 
 ---
 
-## 🔄 Pipeline Overview
+## � Table of Contents
+
+- [What is ParTEA?](#what-is-partea)
+- [Citation](#-citation)
+- [Pipeline Overview](#-pipeline-overview)
+- [Installation](#-installation)
+  - [Via conda/mamba](#via-condamamba-recommended---party-in-a-package)
+  - [Manual Installation](#manual-installation---for-the-diy-partea-planners)
+  - [Configure EarlGrey](#️-important-configure-earlgrey-before-running-partea)
+- [Quick Start](#-quick-start)
+- [Pipeline Modes](#-pipeline-modes)
+  - [Full Pipeline](#-full-pipeline-earlgreypartea)
+  - [Library Construction Only](#️-library-construction-only-earlgreyparte_libconstruct)
+  - [Annotation Only](#-annotation-only-earlgreyparte_annotationonly)
+- [Command-Line Options](#command-line-options)
+- [Configuration Parameters](#configuration-parameters)
+- [Output Structure](#output-structure)
+- [Example Workflows](#example-workflows)
+- [Dynamic Resource Allocation](#-dynamic-resource-allocation)
+- [Requirements](#requirements)
+- [Troubleshooting](#troubleshooting)
+- [Additional Documentation](#additional-documentation)
+- [Support & Contributing](#support--contributing)
+- [License](#license)
+
+---
+
+## �🔄 Pipeline Overview
 
 ParTEA orchestrates TE analysis across multiple genomes with smart parallelization. Here's the workflow:
 
