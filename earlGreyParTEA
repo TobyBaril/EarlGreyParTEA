@@ -100,6 +100,11 @@ run_heliano: true       # Run HELIANO for Helitron detection
 generate_dag: true      # Generate workflow DAG visualizations
 dag_format: "svg"       # Options: "svg", "png", "pdf"
 
+# Saturation analysis options
+saturation_permutations: 100  # Number of random genome-addition permutations to average
+                              # over for the TE family saturation plot. Higher values
+                              # give smoother confidence intervals but increase runtime.
+
 # Advanced options (usually not needed)
 # script_dir: "/path/to/earlgrey/scripts"  # Auto-detected if installed via conda/mamba
 EOF
