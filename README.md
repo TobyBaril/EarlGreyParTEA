@@ -35,6 +35,76 @@ Baril, T., Galbraith, J. and Hayward, A., 2024. Earl Grey: a fully automated use
 
 *ParTEA manuscript in preparation.*
 
+---
+
+## 🔄 Pipeline Overview
+
+ParTEA orchestrates TE analysis across multiple genomes with smart parallelization. Here's the workflow:
+
+```
+                    ┌─────────────────────────────────────┐
+                    │   Input: Multiple Genome FASTAs    │
+                    └──────────────┬──────────────────────┘
+                                   │
+                    ┌──────────────▼──────────────────────┐
+                    │      prep_genome (per genome)       │
+                    │   • Format validation               │
+                    │   • Dictionary creation             │
+                    └──────────────┬──────────────────────┘
+                                   │
+          ┌────────────────────────┼────────────────────────┐
+          │                        │                        │
+    ┌─────▼──────┐          ┌─────▼──────┐          ┌─────▼──────┐
+    │ build_db   │          │ build_db   │          │ build_db   │
+    │ (genome1)  │          │ (genome2)  │   ...    │ (genomeN)  │
+    └─────┬──────┘          └─────┬──────┘          └─────┬──────┘
+          │                        │                        │
+    ┌─────▼──────┐          ┌─────▼──────┐          ┌─────▼──────┐
+    │RepeatModel │          │RepeatModel │          │RepeatModel │
+    │ (genome1)  │          │ (genome2)  │   ...    │ (genomeN)  │
+    └─────┬──────┘          └─────┬──────┘          └─────┬──────┘
+          │                        │                        │
+    ┌─────▼──────┐          ┌─────▼──────┐          ┌─────▼──────┐
+    │TEstrainer  │          │TEstrainer  │          │TEstrainer  │
+    │ (genome1)  │          │ (genome2)  │   ...    │ (genomeN)  │
+    └─────┬──────┘          └─────┬──────┘          └─────┬──────┘
+          │                        │                        │
+          └────────────────────────┼────────────────────────┘
+                                   │
+                    ┌──────────────▼──────────────────────┐
+                    │     cluster_all_species             │
+                    │   • Combine all TE libraries        │
+                    │   • Optional: cd-hit clustering     │
+                    │   • Add RepeatMasker/custom lib     │
+                    └──────────────┬──────────────────────┘
+                                   │
+          ┌────────────────────────┼────────────────────────┐
+          │                        │                        │
+    ┌─────▼──────┐          ┌─────▼──────┐          ┌─────▼──────┐
+    │RepeatMasker│          │RepeatMasker│          │RepeatMasker│
+    │ (genome1)  │          │ (genome2)  │   ...    │ (genomeN)  │
+    └─────┬──────┘          └─────┬──────┘          └─────┬──────┘
+          │                        │                        │
+    ┌─────▼──────┐          ┌─────▼──────┐          ┌─────▼──────┐
+    │merge_repea │          │merge_repea │          │merge_repea │
+    │ (genome1)  │          │ (genome2)  │   ...    │ (genomeN)  │
+    └─────┬──────┘          └─────┬──────┘          └─────┬──────┘
+          │                        │                        │
+    ┌─────▼──────┐          ┌─────▼──────┐          ┌─────▼──────┐
+    │ divergence │          │ divergence │          │ divergence │
+    │ charts etc │          │ charts etc │   ...    │ charts etc │
+    └────────────┘          └────────────┘          └────────────┘
+```
+
+### Optional Steps
+
+- **🎨 HELIANO detection** (`run_heliano: true/false`) - Helitron-specific detection
+- **🔄 Clustering** (`skip_clustering: true/false`) - Merge similar TEs across genomes
+- **🎭 Initial masking** (`repeatmasker_species` or `custom_library`) - Pre-mask known repeats
+- **📊 DAG visualization** (`generate_dag: true/false`) - Generate workflow graphs
+
+**📈 See detailed workflow visualization:** [Example Rulegraph](docs/example_rulegraph.svg)
+
 
 
 ## 📦 Installation
