@@ -8,7 +8,7 @@
 
 **Because analyzing transposable elements across genomes should be a parTEA, not a chore.**
 
-[[![DOI](https://zenodo.org/badge/412126708.svg)](https://zenodo.org/badge/latestdoi/412126708) [![Anaconda-Server Badge]](https://doi.org/10.5281/zenodo.18936437)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18936437.svg)](https://doi.org/10.5281/zenodo.18936437)
 [![Repository](https://img.shields.io/badge/GitHub-EarlGreyParTEA-blue)](https://github.com/TobyBaril/EarlGreyParTEA)
 [![Dependency](https://img.shields.io/badge/Depends%20on-EarlGrey%20%E2%89%A57.0.3-green)](https://github.com/TobyBaril/EarlGrey)
 
