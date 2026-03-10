@@ -66,3 +66,7 @@ rule cluster_all_species:
             
             # Clean up intermediate files
             shell(f"rm -f {combined_file}")
+        
+        # Ensure file is fully written to disk before dependent jobs start
+        shell("sync")
+        shell("sleep 2")
