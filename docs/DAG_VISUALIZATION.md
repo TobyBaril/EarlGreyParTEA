@@ -1,8 +1,18 @@
 # Workflow Visualization
 
-This directory contains automatically generated DAG (Directed Acyclic Graph) visualizations of your EarlGrey pangenome pipeline execution.
+This directory contains automatically generated DAG (Directed Acyclic Graph) visualizations of your EarlGrey pangenome pipeline execution, plus an example rulegraph for documentation.
 
-## Files Generated
+## Example Rulegraph
+
+**[example_rulegraph.svg](example_rulegraph.svg)** - A pre-generated rulegraph showing the library construction workflow. This serves as a visual reference of how ParTEA orchestrates parallel TE library construction across multiple genomes.
+
+**Reading the rulegraph:**
+- **Boxes** represent pipeline rules (steps)
+- **Arrows** show dependencies (what needs to run before what)
+- **Parallel branches** indicate rules that run simultaneously (per-genome operations)
+- **Convergence points** show where results are combined (e.g., clustering)
+
+## Files Generated During Pipeline Runs
 
 ### Full DAG (`dag_{mode}_mode.svg`)
 Shows the complete directed acyclic graph of all jobs that will be executed, with wildcards resolved to actual values (species names, file paths, etc.). This is useful for:
