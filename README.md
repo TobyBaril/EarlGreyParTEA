@@ -111,9 +111,31 @@ ParTEA orchestrates TE analysis across multiple genomes with smart parallelizati
 
 ### Via conda/mamba (Recommended) - *Party in a Package!*
 
+#### Option 1: Add to Existing EarlGrey Environment
+
+If you already have EarlGrey installed in a conda environment:
+
 ```bash
-# Install earlgrey-partea (EarlGrey comes along for the ride!)
+# Activate your existing EarlGrey environment
+mamba activate earlgrey  # or whatever your environment is named
+
+# Install ParTEA into the same environment
 mamba install -c conda-forge -c bioconda earlgrey-partea
+
+# Make sure everything's ready to party
+earlGreyParTEA --help
+```
+
+#### Option 2: Create a New Environment
+
+For a fresh installation with both EarlGrey and ParTEA:
+
+```bash
+# Create a new environment with both packages
+mamba create -n partea -c conda-forge -c bioconda earlgrey-partea
+
+# Activate the environment
+mamba activate partea
 
 # Make sure everything's ready to party
 earlGreyParTEA --help
