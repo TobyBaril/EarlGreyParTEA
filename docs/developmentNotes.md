@@ -148,3 +148,88 @@ Daniel had an issue where he used a custom config, and it was still pulling some
 
 All other optional parameters already had Python-level defaults in `validate_parameters`, so removing the `configfile:` directive is safe. The `--generate-config` command already produces fully self-contained configs with every field explicitly set.
 
+### RepeatMasker general library cache race condition
+
+When multiple RepeatMasker jobs start simultaneously in a freshly configured environment, they all attempt to build the `Libraries/general` cache at the same time. The first process to finish writes the cache; every other process encounters a partially-written `general.working` directory and fails with:
+
+```
+RepeatMasker::createLib(): Error invoking .../makeblastdb on file .../general.working/is.lib.
+```
+
+This only happens on the very first RepeatMasker run in a new conda environment. Subsequent runs succeed because the cache already exists. Re-submitting the pipeline after the failure resolves it, but that requires manual intervention.
+
+**Fix:** A new `repeatmasker_warmup` rule in `rules/lib_construct.smk` runs a single RepeatMasker job on an inline dummy FASTA before any genome jobs start. It checks whether the `Libraries/general` cache directory already exists (conda path: `$(which RepeatMasker | sed 's|/bin/RepeatMasker$|/share/RepeatMasker/Libraries/general|')`); if it does, it exits immediately. If not, it runs RepeatMasker with `-lib dummy.fa` on the dummy sequence to trigger the cache build. The output is a sentinel file (`{outdir}/.repeatmasker_cache_ready`, created via Snakemake's `touch()`). Every RepeatMasker rule lists this sentinel as an input (`_cache`), ensuring the warmup completes before any parallel genome jobs are dispatched. On subsequent runs the sentinel exists and Snakemake skips the warmup entirely.
+
+`rules/annotate_simple.smk` was also removed at this point — it was a dead file not referenced by the `Snakefile` or any other rule file.
+
+**Files changed:**
+- `rules/lib_construct.smk` — added `repeatmasker_warmup` rule; added `_cache` sentinel input to `repeatmasker` and `repeatmasker_custom` rules
+- `rules/annotate.smk` — added `_cache` sentinel input to `repeatmasker_annotation` rule
+- `rules/annotate_simple.smk` — deleted (dead file)
+
+## Test Release v0.1.3
+- [x] Bump version to 0.1.3 in all relevant files:
+  - `earlGreyParTEA`
+  - `earlGreyParTEA_AnnotationOnly`
+  - `earlGreyParTEA_LibConstruct`
+  - `conda/meta.yaml`
+- [x] Build conda package and test install in a fresh environment
+- [x] Run pipeline on test dataset with new config parameters; confirm expected outputs and behaviour
+
+Build conda package:
+```bash
+cd /data/toby/EarlGreyParTEA
+conda build conda/
+conda create -n test_013 --use-local earlgrey-partea
+conda activate test_013
+```
+
+Configure RepeatMasker in the new environment (if not already done):
+```bash
+ln -s /data/toby/tools/earlgrey_databases/Libraries/famdb/* /data/toby/miniforge3/envs/test_013/share/RepeatMasker/Libraries/famdb/
+ln -s /data/toby/tools/earlgrey_databases/Libraries/RMRB.embl /data/toby/miniforge3/envs/test_013/share/RepeatMasker/Libraries/RMRB.embl
+ln -s /data/toby/tools/earlgrey_databases/Libraries/RMRBSeqs.embl /data/toby/miniforge3/envs/test_013/share/RepeatMasker/Libraries/RMRBSeqs.embl
+cd /data/toby/miniforge3/envs/test_013/share/RepeatMasker/
+/data/toby/miniforge3/envs/test_013/bin/perl ./configure
+cd /data/toby/EarlGreyParTEA
+```
+
+Run a full test with the new config parameters:
+```bash
+cd /data/toby/testDIR/
+# make a config with the new parameters set
+earlGreyParTEA --generate-config 3_updated0.1.3.config.yaml
+
+# run the full pipeline with the new config
+earlGreyParTEA \
+    -c /data/toby/testDIR/3_updated0.1.3.config.yaml \
+    -t 32
+```
+
+deactivate the environment, delete it, purge the build, then build again to test the RepeatMasker cache issues
+```bash
+conda deactivate
+conda remove -n test_013 --all
+conda-build purge-all
+
+cd /data/toby/EarlGreyParTEA
+conda build conda/
+conda create -n test_013 --use-local earlgrey-partea
+conda activate test_013
+
+ln -s /data/toby/tools/earlgrey_databases/Libraries/famdb/* /data/toby/miniforge3/envs/test_013/share/RepeatMasker/Libraries/famdb/
+ln -s /data/toby/tools/earlgrey_databases/Libraries/RMRB.embl /data/toby/miniforge3/envs/test_013/share/RepeatMasker/Libraries/RMRB.embl
+ln -s /data/toby/tools/earlgrey_databases/Libraries/RMRBSeqs.embl /data/toby/miniforge3/envs/test_013/share/RepeatMasker/Libraries/RMRBSeqs.embl
+cd /data/toby/miniforge3/envs/test_013/share/RepeatMasker/
+/data/toby/miniforge3/envs/test_013/bin/perl ./configure
+cd /data/toby/EarlGreyParTEA
+
+# run the full pipeline with the new config
+earlGreyParTEA \
+    -c /data/toby/testDIR/3_updated0.1.3.config.yaml \
+    -t 32
+```
+
+This works without any manual intervention, confirming the warmup logic correctly handles the RepeatMasker cache race condition. Check the logs to confirm the warmup rule ran on the first run and was skipped on the second run. Also check that the saturation plot and data were generated correctly in both runs.
+
+I will commit these changes to the `development` branch and then merge into `main` for release v0.1.3.
