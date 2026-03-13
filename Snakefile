@@ -9,8 +9,6 @@ from scripts.on_start_functions import (
 )
 from scripts.generate_dag import generate_dag
 
-configfile: "config/config.yaml"
-
 
 # Apply at parse time
 config = validate_parameters(
@@ -50,6 +48,7 @@ include: "rules/lib_construct.smk"
 if PIPELINE_MODE in ["full", "libconstruct"]:
     # Clustering needed for library construction modes
     include: "rules/clustering.smk"
+    include: "rules/saturation.smk"
 
 if PIPELINE_MODE in ["full", "annotate"]:
     # Annotation rules needed
@@ -80,7 +79,9 @@ if PIPELINE_MODE == "libconstruct":
     rule all:
         input:
             # Library construction only - request the clustered library
-            f"{OUTDIR}/combinedLibraries/combined_all_species.clstrd.fa"
+            f"{OUTDIR}/combinedLibraries/combined_all_species.clstrd.fa",
+            f"{OUTDIR}/combinedLibraries/saturation_plot.pdf",
+            f"{OUTDIR}/combinedLibraries/saturation_data.tsv"
 
 elif PIPELINE_MODE == "annotate":
     rule all:
@@ -150,7 +151,9 @@ else:  # "full" mode (default)
                 "{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}.softmasked.fasta",
                 outdir=OUTDIR,
                 species=SPECIES_LIST
-            ) if SOFTMASK is True or SOFTMASK == 'yes' else []
+            ) if SOFTMASK is True or SOFTMASK == 'yes' else [],
+            f"{OUTDIR}/combinedLibraries/saturation_plot.pdf",
+            f"{OUTDIR}/combinedLibraries/saturation_data.tsv"
 
 
 # Rule to symlink user-provided library for annotation mode

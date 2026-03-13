@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 # earlGreyParTEA_LibConstruct - Pangenome TE Analysis Pipeline (Library Construction Mode)
-# Version 1.0.0
+# Version 0.1.3
 # A Snakemake-based multi-genome transposable element library construction pipeline
 
 set -e
 
-VERSION="1.0.0"
+VERSION="0.1.3"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
@@ -103,6 +103,11 @@ run_heliano: false
 # Workflow visualization (requires graphviz/dot installed)
 generate_dag: true      # Generate workflow DAG visualizations
 dag_format: "svg"       # Options: "svg", "png", "pdf"
+
+# Saturation analysis options
+saturation_permutations: 100  # Number of random genome-addition permutations to average
+                              # over for the TE family saturation plot. Higher values
+                              # give smoother confidence intervals but increase runtime.
 
 # Advanced options (usually not needed)
 # script_dir: "/path/to/earlgrey/scripts"  # Auto-detected if installed via conda/mamba

@@ -18,6 +18,30 @@ if CUSTOM_LIB:
 elif REPSPEC:
     ruleorder: repeatmasker > repeatmasker_custom
 
+rule repeatmasker_warmup:
+    """
+    Pre-build the RepeatMasker general library BLAST cache before parallel genome
+    jobs start. On a freshly configured conda environment, the cache does not yet
+    exist. Running multiple RepeatMasker processes simultaneously causes a race
+    where each tries to write the same cache directory and all but one fail.
+    Running a single warmup job first ensures the cache is in place so that all
+    parallel RepeatMasker jobs can proceed without conflict.
+    """
+    output:
+        sentinel=touch(f"{OUTDIR}/.repeatmasker_cache_ready")
+    threads: 1
+    shell:
+        """
+        RM_SHARE=$(which RepeatMasker | sed 's|/bin/RepeatMasker$|/share/RepeatMasker|')
+        if ! find "$RM_SHARE/Libraries" -maxdepth 2 -type d -name "general" 2>/dev/null | grep -q .; then
+            echo "Warming up RepeatMasker general library cache..." >&2
+            tmp=$(mktemp -d)
+            printf '>dummy\\nATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG\\n' > "$tmp/dummy.fa"
+            RepeatMasker -lib "$tmp/dummy.fa" -norna -no_is -pa 1 -dir "$tmp" "$tmp/dummy.fa" > /dev/null 2>&1 || true
+            rm -rf "$tmp"
+        fi
+        """
+
 def get_masked_genome_input(wildcards):
     """Return appropriate input based on config settings"""
     if REPSPEC:
@@ -70,7 +94,8 @@ def get_masked_genome_input(wildcards):
 
 rule repeatmasker:
     input:
-        genome="{outdir}/{species}_EarlGrey/{species}.prep"
+        genome="{outdir}/{species}_EarlGrey/{species}.prep",
+        _cache=f"{OUTDIR}/.repeatmasker_cache_ready"
     output:
         masked="{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.prep.masked"
     threads: lambda wildcards: max(1, min(workflow.cores // len(SPECIES_LIST), 64))  # Scales 1-64 threads based on cores/genomes
@@ -82,17 +107,15 @@ rule repeatmasker:
         """
         mkdir -p {params.outdir}
         cd {params.outdir}
-        RepeatMasker \
-           -species {params.rep_spec} \
-           -norna -no_is -lcambig -s -a -pa {params.rm_threads} \
-           -dir {params.outdir} \
-           $(realpath {input.genome})
+        RepeatMasker -species {params.rep_spec} -norna -no_is -lcambig -s -a \
+            -pa {params.rm_threads} -dir {params.outdir} $(realpath {input.genome})
         """
 
 rule repeatmasker_custom:
     input:
         genome="{outdir}/{species}_EarlGrey/{species}.prep",
-        lib=CUSTOM_LIB
+        lib=CUSTOM_LIB if CUSTOM_LIB else [],
+        _cache=f"{OUTDIR}/.repeatmasker_cache_ready"
     output:
         masked="{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.prep.masked"
     threads: lambda wildcards: max(1, min(workflow.cores // len(SPECIES_LIST), 64))  # Scales 1-64 threads based on cores/genomes
@@ -103,11 +126,8 @@ rule repeatmasker_custom:
         """
         mkdir -p {params.outdir}
         cd {params.outdir}
-        RepeatMasker \
-            -lib $(realpath {input.lib}) \
-            -norna -no_is -lcambig -s -a -pa {params.rm_threads} \
-            -dir {params.outdir} \
-            $(realpath {input.genome})
+        RepeatMasker -lib $(realpath {input.lib}) -norna -no_is -lcambig -s -a \
+            -pa {params.rm_threads} -dir {params.outdir} $(realpath {input.genome})
         """
 
 rule extract_repeatmasker_library:

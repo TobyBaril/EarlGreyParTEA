@@ -74,6 +74,7 @@ def show_pipeline_mode_visualization(pipeline_mode, config):
             'repeatmodeler': {'libconstruct': '✓', 'annotate': '✗', 'full': '✓'},
             'testrainer': {'libconstruct': '✓', 'annotate': '✗', 'full': '✓'},
             'clustering': {'libconstruct': '✓', 'annotate': '✗', 'full': '✓'},
+            'saturation_plot': {'libconstruct': '✓', 'annotate': '✗', 'full': '✓'},
         },
         'Annotation': {
             'symlink_library': {'libconstruct': '✗', 'annotate': '✓', 'full': '✗'},
@@ -142,7 +143,8 @@ def validate_parameters(config, outfile = None):
         'min_consensus_seqs': (3, "Blast, extend, align, trim process will require {} sequences to generate a new consensus sequence"),
         'run_heliano': (False, None),
         'repeatmasker_species': ("", None),
-        'custom_library': ("", None)
+        'custom_library': ("", None),
+        'saturation_permutations': (100, None),
     }
 
     msg_header("Parameter values")
@@ -183,6 +185,16 @@ def validate_parameters(config, outfile = None):
         cluster_cov = config.get('clustering_coverage', 0.8)
         msg_info(f"TE consensus sequences will be clustered (identity: {cluster_id}, coverage: {cluster_cov})")
         msg_warn("Clustering may affect subfamilies and create chimeras")
+
+    # Saturation plot
+    pipeline_mode_for_sat = config.get('pipeline_mode', 'full')
+    if pipeline_mode_for_sat in ('full', 'libconstruct'):
+        sat_perms = config.get('saturation_permutations', 100)
+        if skip_clustering:
+            msg_info(f"TE family saturation plot will be generated ({sat_perms} permutations, fallback mode: raw sequence counts)")
+            msg_warn("Saturation plot: cross-genome deduplication unavailable when skip_clustering=True")
+        else:
+            msg_info(f"TE family saturation plot will be generated ({sat_perms} permutations)")
 
     # SoftMask
     softmask = config.get('softmask', False)

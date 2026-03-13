@@ -5,7 +5,8 @@ rule cluster_all_species:
         replib=f"{OUTDIR}/{REPSPEC}.RepeatMasker.lib" if REPSPEC else [],
         custom=CUSTOM_LIB if CUSTOM_LIB else []
     output:
-        combined="{outdir}/combinedLibraries/combined_all_species.clstrd.fa"
+        combined="{outdir}/combinedLibraries/combined_all_species.clstrd.fa",
+        clstr="{outdir}/combinedLibraries/combined_all_species.clstrd.fa.clstr"
     threads: lambda wildcards: max(1, min(workflow.cores, 32))  # cd-hit: scales 1-32 threads (single job, runs once)
     resources:
         mem_mb=lambda wildcards, attempt: 16000 * attempt  # 16GB for cd-hit, scales with retries
@@ -57,6 +58,10 @@ rule cluster_all_species:
             # Just copy/rename the combined file as the output (no clustering)
             shell(f"cp {combined_file} {{output.combined}}")
             shell(f"rm -f {combined_file}")
+            # cd-hit-est is not run, so no .clstr is produced.
+            # Touch an empty sentinel so Snakemake dependency tracking still works.
+            # The saturation_plot script detects an empty file and uses a fallback.
+            shell("touch {output.clstr}")
         else:
             # Run cd-hit-est clustering with config parameters
             shell(f"cd-hit-est -d 0 -aS {{params.cluster_coverage}} -c {{params.cluster_identity}} "
