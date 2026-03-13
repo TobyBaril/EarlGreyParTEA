@@ -9,8 +9,6 @@ from scripts.on_start_functions import (
 )
 from scripts.generate_dag import generate_dag
 
-configfile: "config/config.yaml"
-
 
 # Apply at parse time
 config = validate_parameters(

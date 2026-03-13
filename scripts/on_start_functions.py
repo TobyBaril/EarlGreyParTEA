@@ -143,7 +143,8 @@ def validate_parameters(config, outfile = None):
         'min_consensus_seqs': (3, "Blast, extend, align, trim process will require {} sequences to generate a new consensus sequence"),
         'run_heliano': (False, None),
         'repeatmasker_species': ("", None),
-        'custom_library': ("", None)
+        'custom_library': ("", None),
+        'saturation_permutations': (100, None),
     }
 
     msg_header("Parameter values")
