@@ -6,7 +6,8 @@ package:
   version: {{ version }}
 
 source:
-  path: ..
+  url: https://github.com/TobyBaril/EarlGreyParTEA/archive/refs/tags/v{{ version }}.tar.gz
+  sha256: f8e34220f8b32d7b8a291a9e800c2e23b887b1d0c2fa95f2ff851b885f4edcbb
 
 build:
   number: 0
