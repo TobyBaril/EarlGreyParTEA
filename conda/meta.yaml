@@ -12,6 +12,8 @@ source:
 build:
   number: 0
   noarch: python
+  run_exports:
+    - {{ pin_subpackage('earlgrey-partea', max_pin="x") }}
 
 requirements:
   host:
@@ -24,8 +26,6 @@ requirements:
     - graphviz
     - matplotlib
     - numpy
-  run_exports:
-    - {{ pin_subpackage('earlgrey-partea', max_pin="x") }}
 
 test:
   commands:
