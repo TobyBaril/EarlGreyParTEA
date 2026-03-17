@@ -174,7 +174,7 @@ If you already have EarlGrey installed in a conda environment:
 mamba activate earlgrey  # or whatever your environment is named
 
 # Install ParTEA into the same environment
-mamba install -c conda-forge -c bioconda earlgrey-partea
+mamba install -c conda-forge -c bioconda -c toby_baril_bio earlgrey-partea
 
 # Make sure everything's ready to party
 earlGreyParTEA --help
@@ -186,7 +186,7 @@ For a fresh installation with both EarlGrey and ParTEA:
 
 ```bash
 # Create a new environment with both packages
-mamba create -n partea -c conda-forge -c bioconda earlgrey-partea
+mamba create -n partea -c conda-forge -c bioconda -c toby_baril_bio earlgrey-partea
 
 # Activate the environment
 mamba activate partea

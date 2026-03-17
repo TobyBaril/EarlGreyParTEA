@@ -233,3 +233,12 @@ earlGreyParTEA \
 This works without any manual intervention, confirming the warmup logic correctly handles the RepeatMasker cache race condition. Check the logs to confirm the warmup rule ran on the first run and was skipped on the second run. Also check that the saturation plot and data were generated correctly in both runs.
 
 I will commit these changes to the `development` branch and then merge into `main` for release v0.1.3.
+
+## Build and upload to toby_baril_bio channel on Anaconda Cloud
+
+```bash
+cd /data/toby/EarlGreyParTEA
+conda build conda/
+anaconda login
+anaconda upload /data/toby/miniforge3/conda-bld/noarch/earlgrey-partea-0.1.3-py_0.conda
+```
