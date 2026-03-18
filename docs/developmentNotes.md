@@ -270,3 +270,61 @@ anaconda login
 anaconda upload /data/toby/miniforge3/conda-bld/noarch/earlgrey-partea-0.1.3-py_0.conda
 ```
 
+## Release 0.1.5 Feature Updates
+
+### Extended config generation: `--genome-dir` and `--from-csv`
+
+**Goal:** Lower the barrier for new users by letting them auto-populate the
+`genome:` and `species:` blocks of a config file from either a directory of
+FASTA files or a simple CSV spreadsheet, rather than editing the template by
+hand.
+
+**Three supported workflows:**
+1. **Blank template** (unchanged) — `--generate-config my_config.yaml` produces
+   a fully populated config with placeholder genome paths. The user manually
+   fills in paths.
+2. **From a genome directory** — `--generate-config my_config.yaml --genome-dir
+   /path/to/genomes/ [--output-dir /path/to/results/]` scans the directory for
+   FASTA files (`.fa`, `.fasta`, `.fna`, `.fa.gz`, `.fasta.gz`), uses the
+   filename-without-extension as the species name, and auto-populates the
+   `genome:` and `species:` blocks with absolute paths.
+3. **From a CSV file** — `--generate-config my_config.yaml --from-csv
+   genomes.csv [--output-dir /path/to/results/]` reads a CSV with at minimum
+   two columns (`species` and `genome_path`) and populates the config
+   accordingly. Relative genome paths in the CSV are resolved relative to the
+   CSV file's own location.
+
+**Important design decision:** `output_dir` is always a single value supplied
+via `--output-dir` on the command line. It is never read from the CSV — keeping
+a clean separation between the per-genome input metadata (CSV) and the
+run-level output location.
+
+**Species name sanitization:** Species names are passed through a sanitizer
+that replaces characters unsafe in YAML keys or TE sequence headers with `_`.
+Names beginning with a digit are prefixed `s_`. Both transformations emit a
+warning so users are aware of the change.
+
+**Implementation:**
+- `scripts/generate_config.py` — new Python helper containing all genome-dir
+  scanning and CSV parsing logic. Accepts `--output`, `--mode`
+  (`full|libconstruct|annotate`), `--genome-dir`, `--from-csv`, and
+  `--output-dir`. Each bash entry point passes its own mode string, keeping
+  the generated `pipeline_mode:` field correct for the command used.
+- `earlGreyParTEA`, `earlGreyParTEA_LibConstruct`,
+  `earlGreyParTEA_AnnotationOnly` — new optional flags `--genome-dir`,
+  `--from-csv`, `--output-dir` added to argument parsing. When either
+  `--genome-dir` or `--from-csv` is present, the script locates
+  `generate_config.py` using the same search-path logic used for the
+  `Snakefile`, then delegates to Python. Without either flag, the existing
+  inline blank-template behaviour is unchanged (backward compatible, no Python
+  dependency for the plain template path).
+- `--genome-dir` and `--from-csv` are mutually exclusive; supplying both
+  produces an error.
+
+**Files changed:**
+- `scripts/generate_config.py` — new file
+- `earlGreyParTEA` — updated usage, argument parsing, and config-generation
+  dispatch block
+- `earlGreyParTEA_LibConstruct` — same
+- `earlGreyParTEA_AnnotationOnly` — same
+

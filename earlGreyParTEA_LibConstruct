@@ -26,14 +26,23 @@ Optional Parameters:
     -m, --memory INT        Maximum memory in MB (default: no limit)
     -n, --dry-run           Perform dry run (show what would be executed)
     --generate-config FILE  Generate an example config.yaml template
+    --genome-dir DIR        Auto-populate genomes from a directory (use with --generate-config)
+    --from-csv FILE         Populate genomes from a CSV file (use with --generate-config)
+    --output-dir DIR        Set output_dir in the generated config (use with --generate-config)
     --unlock                Unlock working directory after crash
     --rerun-incomplete      Rerun incomplete jobs from previous run
     -h, --help              Show this help message
 
 Example Usage:
-    # Generate example config
+    # Generate example config (blank template)
     earlGreyParTEA_LibConstruct --generate-config my_config.yaml
-    
+
+    # Generate config from a directory of genomes
+    earlGreyParTEA_LibConstruct --generate-config my_config.yaml --genome-dir /path/to/genomes/ --output-dir /path/to/results/
+
+    # Generate config from a CSV file (columns: species, genome_path)
+    earlGreyParTEA_LibConstruct --generate-config my_config.yaml --from-csv genomes.csv --output-dir /path/to/results/
+
     # Build pangenome TE library
     earlGreyParTEA_LibConstruct -c my_config.yaml -t 16
     
@@ -124,6 +133,10 @@ MEMORY=""
 DRY_RUN=""
 UNLOCK=""
 RERUN=""
+GENERATE_CONFIG=""
+GENOME_DIR=""
+FROM_CSV=""
+OUTPUT_DIR=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -144,7 +157,20 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --generate-config)
-            generate_example_config "$2"
+            GENERATE_CONFIG="$2"
+            shift 2
+            ;;
+        --genome-dir)
+            GENOME_DIR="$2"
+            shift 2
+            ;;
+        --from-csv)
+            FROM_CSV="$2"
+            shift 2
+            ;;
+        --output-dir)
+            OUTPUT_DIR="$2"
+            shift 2
             ;;
         --unlock)
             UNLOCK="--unlock"
@@ -165,6 +191,49 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Handle --generate-config (with optional --genome-dir / --from-csv / --output-dir)
+if [ -n "$GENERATE_CONFIG" ]; then
+    if [ -n "$GENOME_DIR" ] && [ -n "$FROM_CSV" ]; then
+        echo "[ERROR] --genome-dir and --from-csv are mutually exclusive"
+        exit 1
+    fi
+    if [ -n "$GENOME_DIR" ] || [ -n "$FROM_CSV" ]; then
+        GEN_CONFIG_PY=""
+        GEN_POSSIBLE=()
+        if [ -n "$CONDA_PREFIX" ] && [ -d "$CONDA_PREFIX/share" ]; then
+            for partea_dir in "$CONDA_PREFIX/share/earlgrey-partea"-*; do
+                if [ -d "$partea_dir" ]; then
+                    GEN_POSSIBLE+=("$partea_dir/scripts/generate_config.py")
+                fi
+            done
+        fi
+        GEN_POSSIBLE+=(
+            "$SCRIPT_DIR/../share/earlgrey-partea/scripts/generate_config.py"
+            "$SCRIPT_DIR/../scripts/generate_config.py"
+            "$SCRIPT_DIR/scripts/generate_config.py"
+            "$(dirname "$SCRIPT_DIR")/scripts/generate_config.py"
+        )
+        for loc in "${GEN_POSSIBLE[@]}"; do
+            if [ -f "$loc" ]; then
+                GEN_CONFIG_PY="$loc"
+                break
+            fi
+        done
+        if [ -z "$GEN_CONFIG_PY" ]; then
+            echo "[ERROR] Could not locate generate_config.py. Please ensure EarlGrey is properly installed."
+            exit 1
+        fi
+        CMD_ARGS=(python "$GEN_CONFIG_PY" --output "$GENERATE_CONFIG" --mode libconstruct)
+        [ -n "$GENOME_DIR" ] && CMD_ARGS+=(--genome-dir "$GENOME_DIR")
+        [ -n "$FROM_CSV" ]   && CMD_ARGS+=(--from-csv   "$FROM_CSV")
+        [ -n "$OUTPUT_DIR" ] && CMD_ARGS+=(--output-dir "$OUTPUT_DIR")
+        "${CMD_ARGS[@]}"
+        exit 0
+    else
+        generate_example_config "$GENERATE_CONFIG"
+    fi
+fi
 
 # Validate required arguments
 if [ -z "$CONFIG" ]; then
