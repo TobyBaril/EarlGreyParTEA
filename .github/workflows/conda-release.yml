@@ -3,6 +3,12 @@ name: Conda Release
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (without leading v, e.g. 0.1.4)'
+        required: true
+        default: '0.1.4'
 
 jobs:
   conda-build-and-deploy:
@@ -17,10 +23,14 @@ jobs:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract version from release tag
+      - name: Extract version from release tag or input
         run: |
-          VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION="${VERSION#v}"
+          fi
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
 
       - name: Compute sha256 of release tarball
@@ -31,7 +41,7 @@ jobs:
 
       - name: Update conda/meta.yaml
         run: |
-          sed -i "s/{% set version = \".*\" %}/{% set version = \"${VERSION}\" %}/" conda/meta.yaml
+          sed -i "s/{% set version = ".*" %}/{% set version = \"${VERSION}\" %}/" conda/meta.yaml
           sed -i "s/  sha256: .*/  sha256: ${SHA256}/" conda/meta.yaml
           sed -i "s/  number: [0-9]*/  number: 0/" conda/meta.yaml
 
