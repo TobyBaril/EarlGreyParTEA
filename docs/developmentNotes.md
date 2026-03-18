@@ -233,3 +233,40 @@ earlGreyParTEA \
 This works without any manual intervention, confirming the warmup logic correctly handles the RepeatMasker cache race condition. Check the logs to confirm the warmup rule ran on the first run and was skipped on the second run. Also check that the saturation plot and data were generated correctly in both runs.
 
 I will commit these changes to the `development` branch and then merge into `main` for release v0.1.3.
+
+### Relative path failure when pipeline is run from a different working directory
+
+Rules in `lib_construct.smk` and `annotate.smk` that `cd` into a subdirectory (e.g. `build_db`, `repeatmodeler`, `testrainer`, `heliano_detection`) used input/param values such as `{input.masked}` or `{input.genome}` **after** the `cd`. When these paths were relative (e.g. `output_dir: condaPull`), the shell could no longer resolve them from the new working directory, producing errors such as:
+
+```
+Command line fasta file condaPull/genome2_EarlGrey/genome2.prep does not exist!
+FileNotFoundError: No such file or directory: '/data/toby/testDIR/condaPull/genome2_EarlGrey/genome2_heliano/condaPull/genome2_EarlGrey/genome2.prep'
+```
+
+**Root cause:** Snakemake expands wildcard patterns using whatever string the user put in `output_dir`, `genome`, etc. If those strings are relative, all derived paths are relative. Any shell block that runs `cd` before referencing an input path then silently looks in the wrong place.
+
+**Fix:** In `validate_parameters` (`scripts/on_start_functions.py`), immediately before the output-directory setup block, all user-supplied file/directory paths are converted to absolute paths with `os.path.abspath`:
+
+```python
+config['output_dir'] = os.path.abspath(config['output_dir'])
+config['genome'] = {sp: os.path.abspath(p) for sp, p in config['genome'].items()}
+if config.get('custom_library'):
+    config['custom_library'] = os.path.abspath(config['custom_library'])
+if config.get('annotation_library'):
+    config['annotation_library'] = os.path.abspath(config['annotation_library'])
+```
+
+Because `validate_parameters` is called at parse time (before any rules run), all wildcard expansions of `{outdir}` and all input genome paths are already absolute by the time Snakemake builds the DAG. No per-rule `$(realpath ...)` patches are needed.
+
+**Files changed:**
+- `scripts/on_start_functions.py` — added path absolutization block in `validate_parameters`
+
+## Build and upload to toby_baril_bio channel on Anaconda Cloud
+
+```bash
+cd /data/toby/EarlGreyParTEA
+conda build conda/
+anaconda login
+anaconda upload /data/toby/miniforge3/conda-bld/noarch/earlgrey-partea-0.1.3-py_0.conda
+```
+

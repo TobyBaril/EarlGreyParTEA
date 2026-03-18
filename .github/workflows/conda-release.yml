@@ -1,0 +1,91 @@
+name: Conda Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (without leading v, e.g. 0.1.4)'
+        required: true
+        default: '0.1.4'
+
+jobs:
+  conda-build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from release tag or input
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION="${VERSION#v}"
+          fi
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+
+      - name: Compute sha256 of release tarball
+        run: |
+          TARBALL_URL="https://github.com/TobyBaril/EarlGreyParTEA/archive/refs/tags/v${VERSION}.tar.gz"
+          SHA256=$(curl -sL "${TARBALL_URL}" | sha256sum | awk '{print $1}')
+          echo "SHA256=${SHA256}" >> "$GITHUB_ENV"
+
+      - name: Update conda/meta.yaml
+        run: |
+          sed -i "s/{% set version = ".*" %}/{% set version = \"${VERSION}\" %}/" conda/meta.yaml
+          sed -i "s/  sha256: .*/  sha256: ${SHA256}/" conda/meta.yaml
+          sed -i "s/  number: [0-9]*/  number: 0/" conda/meta.yaml
+
+      - name: Commit and push updated conda/meta.yaml
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add conda/meta.yaml
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: update conda/meta.yaml for release v${VERSION} [skip ci]"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Set up conda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-activate-base: true
+          auto-update-conda: true
+          python-version: '3.12'
+
+      - name: Install build tools
+        shell: bash -l {0}
+        run: |
+          conda install -y -c conda-forge conda-build anaconda-client
+
+      - name: Lint the conda recipe
+        shell: bash -l {0}
+        run: |
+          conda build --check conda/
+
+      - name: Build the conda package
+        shell: bash -l {0}
+        run: |
+          conda build conda/ -c conda-forge -c bioconda --no-anaconda-upload
+          PACKAGE_PATH=$(conda build conda/ -c conda-forge --output)
+          echo "PACKAGE_PATH=${PACKAGE_PATH}" >> "$GITHUB_ENV"
+
+      - name: Upload to Anaconda
+        shell: bash -l {0}
+        run: |
+          anaconda -t ${{ secrets.ANACONDA_API_TOKEN }} upload \
+            --user toby_baril_bio \
+            --force \
+            "${PACKAGE_PATH}"
