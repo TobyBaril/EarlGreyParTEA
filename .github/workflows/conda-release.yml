@@ -78,7 +78,7 @@ jobs:
       - name: Build the conda package
         shell: bash -l {0}
         run: |
-          conda build conda/ -c conda-forge -c defaults --no-anaconda-upload
+          conda build conda/ -c conda-forge -c bioconda --no-anaconda-upload
           PACKAGE_PATH=$(conda build conda/ -c conda-forge --output)
           echo "PACKAGE_PATH=${PACKAGE_PATH}" >> "$GITHUB_ENV"
 
