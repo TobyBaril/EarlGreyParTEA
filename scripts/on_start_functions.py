@@ -348,6 +348,16 @@ def validate_parameters(config, outfile = None):
         msg_warn(f"Error checking EarlGrey configuration: {e}")
 
     # --------------------------------------------------
+    # Absolutize all paths so rules work correctly after `cd`
+    # --------------------------------------------------
+    config['output_dir'] = os.path.abspath(config['output_dir'])
+    config['genome'] = {sp: os.path.abspath(p) for sp, p in config['genome'].items()}
+    if config.get('custom_library'):
+        config['custom_library'] = os.path.abspath(config['custom_library'])
+    if config.get('annotation_library'):
+        config['annotation_library'] = os.path.abspath(config['annotation_library'])
+
+    # --------------------------------------------------
     # Output setup
     # --------------------------------------------------
     msg_header("Output setup")
