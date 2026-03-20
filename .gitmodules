@@ -1,0 +1,3 @@
+[submodule "scripts/TEstrainer"]
+	path = scripts/TEstrainer
+	url = https://github.com/jamesdgalbraith/TEstrainer.git
