@@ -19,7 +19,10 @@ rule repeatmasker_annotation:
         masked="{outdir}/{species}_EarlGrey/{species}_RepeatMasker_Against_Custom_Library/{species}.prep.masked",
         out="{outdir}/{species}_EarlGrey/{species}_RepeatMasker_Against_Custom_Library/{species}.prep.out",
         tbl="{outdir}/{species}_EarlGrey/{species}_RepeatMasker_Against_Custom_Library/{species}.prep.tbl"
-    threads: lambda wildcards: max(1, min(workflow.cores // len(SPECIES_LIST), 64))  # Scales 1-64 threads based on cores/genomes
+    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
+    resources:
+        mem_mb=lambda wildcards, attempt: 16000 * attempt,
+        runtime=10080
     params:
         outdir="{outdir}/{species}_EarlGrey/{species}_RepeatMasker_Against_Custom_Library",
         rm_threads=lambda wildcards, threads: max(1, threads // 4)  # RepeatMasker -pa value (uses 4x this)
@@ -36,9 +39,10 @@ rule heliano_detection:
         genome="{outdir}/{species}_EarlGrey/{species}.prep"
     output:
         helitron_gff="{outdir}/{species}_EarlGrey/{species}_heliano/RC.representative.gff"
-    threads: lambda wildcards: max(1, min(workflow.cores // len(SPECIES_LIST), 32))  # HELIANO: scales 1-32 threads
+    threads: lambda wildcards: max(1, min(workflow.cores, 32)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 32))
     resources:
-        mem_mb=lambda wildcards, attempt: 8000 * attempt  # 8GB, scales with retries
+        mem_mb=lambda wildcards, attempt: 8000 * attempt,
+        runtime=480
     params:
         heliano_dir="{outdir}/{species}_EarlGrey/{species}_heliano"
     shell:
@@ -68,9 +72,10 @@ rule merge_repeats:
         bed="{outdir}/{species}_EarlGrey/{species}_mergedRepeats/looseMerge/{species}.filteredRepeats.bed",
         gff="{outdir}/{species}_EarlGrey/{species}_mergedRepeats/looseMerge/{species}.filteredRepeats.gff",
         summary="{outdir}/{species}_EarlGrey/{species}_mergedRepeats/looseMerge/{species}.filteredRepeats.summary"
-    threads: lambda wildcards: max(1, min(workflow.cores // len(SPECIES_LIST), 16))  # mergeRepeats: scales 1-16 threads
+    threads: lambda wildcards: max(1, min(workflow.cores, 16)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 16))
     resources:
-        mem_mb=lambda wildcards, attempt: 8000 * attempt  # 8GB, scales with retries
+        mem_mb=lambda wildcards, attempt: 8000 * attempt,
+        runtime=240
     params:
         script_dir=SCRIPT_DIR,
         outdir="{outdir}/{species}_EarlGrey/{species}_mergedRepeats/looseMerge",
@@ -114,6 +119,10 @@ rule generate_summary_charts:
     output:
         pie="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}.summaryPie.pdf",
         highLevelCount="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}.highLevelCount.txt"
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=30
     params:
         script_dir=SCRIPT_DIR,
         outdir="{outdir}/{species}_EarlGrey/{species}_summaryFiles"
@@ -133,7 +142,10 @@ rule calculate_divergence:
     output:
         div_gff="{outdir}/{species}_EarlGrey/{species}_RepeatLandscape/{species}.filteredRepeats.withDivergence.gff",
         div_summary="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}_divergence_summary_table.tsv"
-    threads: lambda wildcards: max(1, min(workflow.cores // len(SPECIES_LIST), 16))  # Divergence: scales 1-16 threads
+    threads: lambda wildcards: max(1, min(workflow.cores, 16)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 16))
+    resources:
+        mem_mb=lambda wildcards, attempt: 8000 * attempt,
+        runtime=480
     params:
         script_dir=SCRIPT_DIR,
         landscape_dir="{outdir}/{species}_EarlGrey/{species}_RepeatLandscape",
@@ -174,6 +186,10 @@ rule sweep_up_files:
     output:
         summary_bed="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}.filteredRepeats.bed",
         summary_gff="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}.filteredRepeats.gff"
+    threads: 1
+    resources:
+        mem_mb=2000,
+        runtime=15
     params:
         summary_dir="{outdir}/{species}_EarlGrey/{species}_summaryFiles"
     shell:
@@ -189,6 +205,10 @@ rule generate_softmasked_genome:
         backup="{outdir}/{species}_EarlGrey/{species}.bak.gz"
     output:
         softmasked="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}.softmasked.fasta"
+    threads: 1
+    resources:
+        mem_mb=8000,
+        runtime=60
     shell:
         """
         if [ "{SOFTMASK}" == "yes" ]; then

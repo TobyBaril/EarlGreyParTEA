@@ -30,6 +30,9 @@ rule repeatmasker_warmup:
     output:
         sentinel=touch(f"{OUTDIR}/.repeatmasker_cache_ready")
     threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=30
     shell:
         """
         RM_SHARE=$(which RepeatMasker | sed 's|/bin/RepeatMasker$|/share/RepeatMasker|')
@@ -59,6 +62,10 @@ rule prep_genome:
         gen_prep="{OUTDIR}/{species}_EarlGrey/{species}.prep",
         gen_dict="{OUTDIR}/{species}_EarlGrey/{species}.dict",
         backup="{OUTDIR}/{species}_EarlGrey/{species}.bak.gz"
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=60
     params:
         script_dir=SCRIPT_DIR
     shell:
@@ -98,7 +105,10 @@ rule repeatmasker:
         _cache=f"{OUTDIR}/.repeatmasker_cache_ready"
     output:
         masked="{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.prep.masked"
-    threads: lambda wildcards: max(1, min(workflow.cores // len(SPECIES_LIST), 64))  # Scales 1-64 threads based on cores/genomes
+    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
+    resources:
+        mem_mb=lambda wildcards, attempt: 16000 * attempt,
+        runtime=10080
     params:
         outdir="{outdir}/{species}_EarlGrey/{species}_RepeatMasker",
         rep_spec=REPSPEC,
@@ -118,7 +128,10 @@ rule repeatmasker_custom:
         _cache=f"{OUTDIR}/.repeatmasker_cache_ready"
     output:
         masked="{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.prep.masked"
-    threads: lambda wildcards: max(1, min(workflow.cores // len(SPECIES_LIST), 64))  # Scales 1-64 threads based on cores/genomes
+    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
+    resources:
+        mem_mb=lambda wildcards, attempt: 16000 * attempt,
+        runtime=10080
     params:
         outdir="{outdir}/{species}_EarlGrey/{species}_RepeatMasker",
         rm_threads=lambda wildcards, threads: max(1, threads // 4)  # RepeatMasker -pa value (uses 4x this)
@@ -136,6 +149,10 @@ rule extract_repeatmasker_library:
     params:
         repspec=REPSPEC,
         outdir=OUTDIR
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=30
     shell:
         """
         # Determine RepeatMasker library path
@@ -160,6 +177,10 @@ rule build_db:
         db="{outdir}/{species}_EarlGrey/{species}_Database/{species}.nhr",
         nin="{outdir}/{species}_EarlGrey/{species}_Database/{species}.nin",
         nsq="{outdir}/{species}_EarlGrey/{species}_Database/{species}.nsq"
+    threads: 1
+    resources:
+        mem_mb=lambda wildcards, attempt: 8000 * attempt,
+        runtime=120
     params:
         outdir="{outdir}/{species}_EarlGrey/{species}_Database",
         name="{species}"
@@ -177,9 +198,10 @@ rule repeatmodeler:
         nsq="{outdir}/{species}_EarlGrey/{species}_Database/{species}.nsq"
     output:
         families="{outdir}/{species}_EarlGrey/{species}_Database/{species}-families.fa"
-    threads: lambda wildcards: max(1, min(workflow.cores // len(SPECIES_LIST), 64))  # Scales 1-64 threads based on cores/genomes
+    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
     resources:
-        mem_mb=lambda wildcards, attempt: 16000 * attempt  # 16GB, scales with retries
+        mem_mb=lambda wildcards, attempt: 32000 * attempt,
+        runtime=10080
     params:
         db_dir="{outdir}/{species}_EarlGrey/{species}_Database",
         rm_dir="{outdir}/{species}_EarlGrey/{species}_RepeatModeler",
@@ -198,9 +220,10 @@ rule testrainer:
     output:
         strained="{outdir}/{species}_EarlGrey/{species}_strainer/{species}-families.fa.strained",
         summary="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}-families.fa.strained"
-    threads: lambda wildcards: max(1, min(workflow.cores // len(SPECIES_LIST), 64))  # Scales 1-64 threads based on cores/genomes
+    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
     resources:
-        mem_mb=lambda wildcards, attempt: 8000 * attempt  # 8GB, scales with retries
+        mem_mb=lambda wildcards, attempt: config.get("total_memory_mb", 32000 * attempt),
+        runtime=10080
     params:
         outdir=OUTDIR,
         flank=FLANK,

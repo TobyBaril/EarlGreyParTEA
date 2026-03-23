@@ -20,6 +20,10 @@ rule saturation_plot:
     output:
         plot=f"{OUTDIR}/combinedLibraries/saturation_plot.pdf",
         table=f"{OUTDIR}/combinedLibraries/saturation_data.tsv",
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=30
     params:
         species=SPECIES_LIST,
         repspec=REPSPEC,
