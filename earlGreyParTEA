@@ -22,7 +22,11 @@ Required Parameters:
     -t, --threads INT       Number of threads to use
 
 Optional Parameters:
-    -m, --memory INT        Maximum memory in MB (default: no limit)
+    -m, --memory INT        Scheduling memory budget in MB (default: no limit). Controls how many
+                            jobs run simultaneously — Snakemake will not start a new job if doing
+                            so would exceed this budget. Does NOT cap per-process memory at OS
+                            level. If the pipeline crashes with OOM, lower this value to reduce
+                            concurrency rather than raising it.
     -n, --dry-run           Perform dry run (show what would be executed)
     --generate-config FILE  Generate an example config.yaml template
     --genome-dir DIR        Auto-populate genomes from a directory (use with --generate-config)
@@ -30,6 +34,11 @@ Optional Parameters:
     --output-dir DIR        Set output_dir in the generated config (use with --generate-config)
     --unlock                Unlock working directory after crash
     --rerun-incomplete      Rerun incomplete jobs from previous run
+    --slurm                 Submit jobs to a SLURM cluster via snakemake-executor-plugin-slurm
+    --slurm-jobs N          Max concurrent SLURM jobs (default: genomes × 3, capped at 200)
+    --slurm-partition PART  SLURM partition/queue to submit to (required with --slurm)
+    --slurm-account ACCT    SLURM account string (optional)
+    --slurm-extra "FLAGS"   Additional raw sbatch flags (e.g. "--constraint=avx2")
     -h, --help              Show this help message
 
 Example Usage:
@@ -133,6 +142,11 @@ GENERATE_CONFIG=""
 GENOME_DIR=""
 FROM_CSV=""
 OUTPUT_DIR=""
+SLURM=false
+SLURM_JOBS=""
+SLURM_PARTITION=""
+SLURM_ACCOUNT=""
+SLURM_EXTRA=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -175,6 +189,26 @@ while [[ $# -gt 0 ]]; do
         --rerun-incomplete)
             RERUN="--rerun-incomplete"
             shift
+            ;;
+        --slurm)
+            SLURM=true
+            shift
+            ;;
+        --slurm-jobs)
+            SLURM_JOBS="$2"
+            shift 2
+            ;;
+        --slurm-partition)
+            SLURM_PARTITION="$2"
+            shift 2
+            ;;
+        --slurm-account)
+            SLURM_ACCOUNT="$2"
+            shift 2
+            ;;
+        --slurm-extra)
+            SLURM_EXTRA="$2"
+            shift 2
             ;;
         -h|--help)
             usage
@@ -294,31 +328,69 @@ echo "[INFO] Using config: $CONFIG"
 echo "[INFO] Threads: $THREADS"
 
 # Build snakemake command
-SNAKEMAKE_CMD="snakemake --snakefile $SNAKEFILE --configfile $CONFIG --cores $THREADS"
-
-if [ -n "$MEMORY" ]; then
-    SNAKEMAKE_CMD="$SNAKEMAKE_CMD --resources mem_mb=$MEMORY"
-    echo "[INFO] Memory limit: ${MEMORY}MB"
+if $SLURM; then
+    # --- SLURM mode ---
+    if [ -z "$SLURM_PARTITION" ]; then
+        echo "[ERROR] --slurm-partition is required when using --slurm"
+        exit 1
+    fi
+    # Default: genomes × 3, capped at 200
+    if [ -z "$SLURM_JOBS" ]; then
+        N_GENOMES=$(python3 -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(len(cfg.get('species', cfg.get('genome', {}))))" 2>/dev/null || echo 1)
+        SLURM_JOBS=$(( N_GENOMES * 3 ))
+        [ "$SLURM_JOBS" -gt 200 ] && SLURM_JOBS=200
+    fi
+    # Build default-resources as an array — Snakemake 9 requires each key=value as a
+    # separate argument; passing them as a single quoted string passes the literal " char.
+    DEFAULT_RESOURCES=("slurm_partition=$SLURM_PARTITION")
+    [ -n "$SLURM_ACCOUNT" ] && DEFAULT_RESOURCES+=("slurm_account=$SLURM_ACCOUNT")
+    [ -n "$SLURM_EXTRA" ]   && DEFAULT_RESOURCES+=("slurm_extra=$SLURM_EXTRA")
+    echo "[INFO] SLURM mode: partition=$SLURM_PARTITION jobs=$SLURM_JOBS"
+    SNAKEMAKE_ARGS=(
+        snakemake
+        --snakefile "$SNAKEFILE"
+        --configfile "$CONFIG"
+        --config slurm_mode=true
+        --executor slurm
+        --default-resources "${DEFAULT_RESOURCES[@]}"
+        --jobs "$SLURM_JOBS"
+        --cores "$THREADS"
+        --latency-wait 60
+        --retries 1
+    )
+else
+    # --- Local mode ---
+    SNAKEMAKE_ARGS=(snakemake --snakefile "$SNAKEFILE" --configfile "$CONFIG" --cores "$THREADS")
+    if [ -n "$MEMORY" ]; then
+        if [ "$MEMORY" -lt 32000 ]; then
+            echo "[WARNING] -m ${MEMORY}MB is below the recommended minimum of 32000MB. TEstrainer"
+            echo "          requires approximately 32 GB per job and may crash with less. Consider"
+            echo "          increasing -m or running on a machine with more RAM."
+        fi
+        SNAKEMAKE_ARGS+=(--resources "mem_mb=$MEMORY")
+        SNAKEMAKE_ARGS+=(--config "total_memory_mb=$MEMORY")
+        echo "[INFO] Memory limit: ${MEMORY}MB"
+    fi
 fi
 
 if [ -n "$DRY_RUN" ]; then
-    SNAKEMAKE_CMD="$SNAKEMAKE_CMD $DRY_RUN"
+    SNAKEMAKE_ARGS+=("$DRY_RUN")
     echo "[INFO] Performing dry run"
 fi
 
 if [ -n "$UNLOCK" ]; then
-    SNAKEMAKE_CMD="$SNAKEMAKE_CMD $UNLOCK"
+    SNAKEMAKE_ARGS+=("$UNLOCK")
     echo "[INFO] Unlocking working directory"
 fi
 
 if [ -n "$RERUN" ]; then
-    SNAKEMAKE_CMD="$SNAKEMAKE_CMD $RERUN"
+    SNAKEMAKE_ARGS+=("$RERUN")
     echo "[INFO] Rerunning incomplete jobs"
 fi
 
 # Execute
 echo ""
-echo "Executing: $SNAKEMAKE_CMD"
+echo "Executing: ${SNAKEMAKE_ARGS[*]}"
 echo ""
 
-exec $SNAKEMAKE_CMD
+exec "${SNAKEMAKE_ARGS[@]}"

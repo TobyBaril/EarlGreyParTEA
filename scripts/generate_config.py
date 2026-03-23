@@ -184,6 +184,11 @@ saturation_permutations: 100  # Number of random genome-addition permutations to
 
 # Advanced options (usually not needed)
 # script_dir: "/path/to/earlgrey/scripts"  # Auto-detected if installed via conda/mamba
+
+# SLURM cluster settings (only used with --slurm flag)
+slurm_partition: ""   # partition/queue to submit to (required with --slurm)
+slurm_account: ""     # account string (leave empty if not required)
+slurm_extra: ""       # any extra sbatch flags, e.g. "--constraint=avx2"
 """
 
 LIBCONSTRUCT_TEMPLATE = """\
@@ -230,6 +235,11 @@ saturation_permutations: 100  # Number of random genome-addition permutations to
 
 # Advanced options (usually not needed)
 # script_dir: "/path/to/earlgrey/scripts"  # Auto-detected if installed via conda/mamba
+
+# SLURM cluster settings (only used with --slurm flag)
+slurm_partition: ""   # partition/queue to submit to (required with --slurm)
+slurm_account: ""     # account string (leave empty if not required)
+slurm_extra: ""       # any extra sbatch flags, e.g. "--constraint=avx2"
 """
 
 ANNOTATE_TEMPLATE = """\
@@ -270,6 +280,11 @@ dag_format: "svg"       # Options: "svg", "png", "pdf"
 
 # Advanced options (usually not needed)
 # script_dir: "/path/to/earlgrey/scripts"  # Auto-detected if installed via conda/mamba
+
+# SLURM cluster settings (only used with --slurm flag)
+slurm_partition: ""   # partition/queue to submit to (required with --slurm)
+slurm_account: ""     # account string (leave empty if not required)
+slurm_extra: ""       # any extra sbatch flags, e.g. "--constraint=avx2"
 """
 
 TEMPLATES = {

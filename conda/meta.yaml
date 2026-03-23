@@ -1,13 +1,12 @@
 {% set name = "earlgrey-partea" %}
-{% set version = "0.1.4" %}
+{% set version = "0.1.5" %}
 
 package:
   name: {{ name|lower }}
   version: {{ version }}
 
 source:
-  url: https://github.com/TobyBaril/EarlGreyParTEA/archive/refs/tags/v{{ version }}.tar.gz
-  sha256: 117e5e45913151576df65c04f11fca06975e7e87848e372042de20129ff4a943
+  path: ..
 
 build:
   number: 0
@@ -22,6 +21,7 @@ requirements:
     - python
     - earlgrey >=7.1.0
     - snakemake-minimal
+    - snakemake-executor-plugin-slurm
     - cd-hit
     - graphviz
     - matplotlib
