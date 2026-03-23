@@ -725,3 +725,17 @@ conda build conda/
 anaconda login
 anaconda upload /data/toby/miniforge3/conda-bld/noarch/earlgrey-partea-0.1.5-py_0.conda
 ```
+
+Test the new version in a fresh environment:
+
+```bash
+mamba create -n partea_015 -c toby_baril_bio earlgrey-partea=0.1.5
+conda activate partea_015
+ln -s /data/toby/tools/earlgrey_databases/Libraries/famdb/* /data/toby/miniforge3/envs/partea_015/share/RepeatMasker/Libraries/famdb/
+ln -s /data/toby/tools/earlgrey_databases/Libraries/RMRB.embl /data/toby/miniforge3/envs/partea_015/share/RepeatMasker/Libraries/RMRB.embl
+ln -s /data/toby/tools/earlgrey_databases/Libraries/RMRBSeqs.embl /data/toby/miniforge3/envs/partea_015/share/RepeatMasker/Libraries/RMRBSeqs.embl
+cd /data/toby/miniforge3/envs/partea_015/share/RepeatMasker/
+/data/toby/miniforge3/envs/partea_015/bin/perl ./configure
+cd /data/toby/testDIR/saturationTests/6_slurmTest
+```
+
