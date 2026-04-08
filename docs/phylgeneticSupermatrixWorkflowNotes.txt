@@ -1,0 +1,221 @@
+# Notes on Creating Phylogenetic Trees Using a BUSCO Supermatrix Approach for Alice L.
+
+##### STEP 0 - Things to consider #####
+## It is nice to create a rooted tree. To do this, you need to find 2-3 species to form an outgroup for your analysis.
+## These could be some other fungi that are distant/early diverging compared to your focal species
+## Maybe grab a couple of early-diverging fungi, but close enough to your groups of interest
+## In your case, some Zoopagomycota might make a good outgroup, as you have Basidiomycota, Ascomycota, and Mucoromycota
+ 
+##### STEP 1 - Running BUSCO on all input genomes #####
+
+## Make a directory to store all analyses 
+
+mkdir -p /path/to/fungiPhylogeny/busco && cd /path/to/fungiPhylogeny/busco
+
+## Run BUSCO on all input genomes (I would recommend using a conda env for this)
+## submit the SBATCH with the conda env active
+
+mamba activate busco
+
+##### THIS IS THE SCRIPT CONTENTS #####
+
+#!/bin/bash
+#SBATCH --time=168:00:00 # Each task takes max 7 days
+#SBATCH --mem-per-cpu=8G # Each task uses max 8GB memory
+#SBATCH --cpus-per-task=2 # Each task uses 2 CPUs
+#SBATCH --array=1-31%2 # submit 31 tasks with task ID 1,2,...,31.
+
+# set directories
+data_dir=/path/to/genomesDirectory
+
+# get parameters - this is a file with the name of each genome file, and the 
+## name of the resultant output file (WITHOUT PATHS)
+param_store=/path/to/buscoParameters.txt
+##### param_store contains tab-separated lines that look like #####
+##### agabis3.fna	BUSCO_agabis3 #####
+### this file contains 31 lines with 2 arguments per line
+### line <i> contains arguments for run <i>
+# get first argument (name of genome file)
+arg_one=$(cat $param_store | awk -v var=$SLURM_ARRAY_TASK_ID 'NR==var {print $1}')
+# get second argument (name for output directory)
+arg_two=$(cat $param_store | awk -v var=$SLURM_ARRAY_TASK_ID 'NR==var {print $2}')
+
+# run busco
+srun busco -i ${data_dir}/${arg_one} -m genome -l fungi_odb10 -c 2 -o ${arg_two}
+
+##### END OF THE SCRIPT CONTENTS #####
+
+##### STEP 2 - Extract complete BUSCO genes from runs #####
+
+## Move to parent directory as this is where we will store the list
+
+cd /path/to/fungiPhylogeny/
+
+## Extract any gene from each directory that is complete
+
+for file in /path/to/fungiPhylogeny/busco/*/run_fungi_odb10/full_table.tsv ;
+	do grep -v "^#" ${file} | awk '$2 == "Complete" {print $1}' >> complete_busco_ids.txt ;
+done
+
+##### STEP 3 - Filter complete BUSCO gene that are present in < 3 genomes #####
+
+## sort the complete IDs and count how many genomes they appeared in
+
+sort complete_busco_ids.txt | uniq -c > complete_busco_ids_with_counts.txt
+
+## keep only those present in at least 3 genomes
+
+awk '$1 > 2 {print $2}' complete_busco_ids_with_counts.txt > final_busco_ids.txt
+
+##### STEP 4 - Copy amino acid sequences and name files with species name in them #####
+
+## make a directory to store amino sequences 
+
+mkdir -p /path/to/fungiPhylogeny/busco_aa
+
+## extract and rename amino acid sequences
+
+for directory in $(find /path/to/fungiPhylogeny/busco/ -type d -name "single_copy_busco_sequences") ; 
+	do sppname=$(echo ${directory} | sed 's/\.\///g; s/\/.*//g') ;
+		for file in ${directory}/*.faa ;
+			do filename=$(basename ${file}) ; 
+			   cp ${file} /path/to/fungiPhylogeny/busco_aa/${sppname}_${filename} ;
+		done ;
+done
+
+##### STEP 5 - Add species names to FASTA headers #####
+
+## move into the correct directory
+
+cd /path/to/fungiPhylogeny/busco_aa
+
+## Add names to files
+
+for file in *.faa ; 
+	do sed -i 's/^>/>'${file%_*}'|/g; /^>/s/:.*//g' ${file} ;
+done
+
+##### STEP 6 - Generate a single file for each BUSCO ID #####
+
+while read line ;
+	do cat *_${line}.faa >> ${line}_aa.fasta ;
+done < /path/to/fungiPhylogeny/final_busco_ids.txt
+
+##### STEP 6.5 - CHECK THE FILES LOOK OKAY!!!! #####
+## check the fasta headers are consistent (this is really important for later)
+## check the general file structure looks okay
+## get into the habit of checking what output files look like every time you run something
+
+##### STEP 7 - Delete individual FASTA files, as these are still saved in the BUSCO directories #####
+
+for file in *.faa ;
+	do rm ${file} ; 
+done
+
+##### Step 8 - Align peptide sequences for each gene #####
+
+## make a directory for the results
+
+mkdir -p /path/to/fungiPhylogeny/alignments && cd /path/to/fungiPhylogeny/alignments
+
+## run mafft for each input file (probably use sbatch for this + install mafft in mamba env)
+
+mamba activate mafft
+
+##### THIS IS THE SCRIPT CONTENTS #####
+
+#!/bin/bash
+#SBATCH --time=168:00:00 # Each task takes max 7 days
+#SBATCH --mem-per-cpu=8G # Each task uses max 8GB memory
+#SBATCH --cpus-per-task=2 # Each task uses 2 CPUs
+#SBATCH --array=1-31%2 # submit 31 tasks with task ID 1,2,...,31.
+
+# set directories
+data_dir=/path/to/fungiPhylogeny/busco_aa
+
+# get parameters - this is a file with the name of each genome file, and the 
+## name of the resultant output file (WITHOUT PATHS)
+param_store=/path/to/alignmentParameters.txt
+##### param_store contains single column containing the name for each file #####
+##### gene1_aa.fasta #####
+### this file contains X lines with 1 arguments per line
+### line <i> contains arguments for run <i>
+# get first argument (name of alignment file)
+arg_one=$(cat $param_store | awk -v var=$SLURM_ARRAY_TASK_ID 'NR==var {print $1}')
+
+# run busco
+srun mafft --auto ${data_dir}/${arg_one} > /path/to/fungiPhylogeny/alignments/${arg_one%.fasta}.aln
+
+##### END OF THE SCRIPT CONTENTS #####
+
+##### STEP 9 - Edit headers so they are the same in every alignment file (so species name is all that is in the header)
+
+## change to correct directory
+
+cd /path/to/fungiPhylogeny/alignments/
+
+## make a directory to store results (rather than overwrite in case we mess something up!)
+
+mkdir -p /path/to/fungiPhylogeny/alignments/fixedHeader
+
+## delete empty alignments
+
+find . -size  0 -print -delete
+
+## MAKE A NOTE OF WHICH ARE PRINTED!
+
+## fix the fasta headers
+
+for file in *.aln ;
+	do sed '/^>/s/|.*//g' $file > ./fixedHeader/${file} ; 
+done
+
+##### STEP 10 - Create a supermatrix
+
+## make a directory
+
+mkdir -p /path/to/fungiPhylogeny/supermatrix && cd /path/to/fungiPhylogeny/supermatrix
+
+## make a mamba env with the correct tools
+
+mamba create -n phykit bioconda::phykit bioconda::clipkit bioconda::iqtree
+
+## activate the env
+
+mamba activate phykit
+
+## create a list of alignment files
+
+realpath /path/to/fungiPhylogeny/alignments/fixedHeader/* > alignmentList.txt
+
+## concatenate the alignments
+
+phykit create_concat -a alignmentList.txt -p fungi_supermatrix
+
+## trim uninformative regions
+
+clipkit fungi_supermatrix.fa
+
+##### STEP 11 - Run the tree #####
+
+## make a directory for the tree
+
+mkdir -p /path/to/fungiPhylogeny/tree && cd /path/to/fungiPhylogeny/tree
+
+## symlink the alignment that the tree will use
+
+ln -sr ../supermatrix/fungi_supermatrix.fa.clipkit .
+
+## Run IQ-tree2 with bootstraps (Submit this to SBATCH with 1000h at least, but check it runs on 1 core first in case there are file issues)
+
+iqtree2 -s fungi_supermatrix.fa.clipkit \
+		-bb 1000 \ # run 1000 bootstraps
+		-T AUTO \ # automatically determine best number of CPUs
+		-o outgroup1,outgroup2,outgroup3 # comma-separated outgroup species headers
+
+
+
+
+
+
+

@@ -149,16 +149,24 @@ rule calculate_divergence:
     params:
         script_dir=SCRIPT_DIR,
         landscape_dir="{outdir}/{species}_EarlGrey/{species}_RepeatLandscape",
-        summary_dir="{outdir}/{species}_EarlGrey/{species}_summaryFiles"
+        summary_dir="{outdir}/{species}_EarlGrey/{species}_summaryFiles",
+        divcalc_tmp="/tmp/egdiv_{species}",
     shell:
         """
         mkdir -p {params.landscape_dir}
         cd {params.landscape_dir}
         
+        # divergence_calc.py calls pybedtools.set_tempdir() which sets
+        # tempfile.tempdir globally. tempfile.tempdir takes priority over TMPDIR,
+        # so a long output path would exceed the 108-char AF_UNIX socket limit.
+        # Pass -tmp with a short per-species path in /tmp to avoid this.
+        mkdir -p {params.divcalc_tmp}
+        
         # Calculate divergence
         python {params.script_dir}/divergenceCalc/divergence_calc.py \
             -l {input.library} -g {input.genome_orig} -i {input.gff} \
-            -o {output.div_gff} -t {threads}
+            -o {output.div_gff} -t {threads} \
+            -tmp {params.divcalc_tmp}
         
         # Generate divergence plots
         Rscript {params.script_dir}/divergenceCalc/divergence_plot.R \
@@ -173,7 +181,7 @@ rule calculate_divergence:
         cp {output.div_gff} {input.gff}
         
         # Cleanup
-        rm -rf {params.landscape_dir}/tmp/ || true
+        rm -rf {params.divcalc_tmp} || true
         """
 
 rule sweep_up_files:

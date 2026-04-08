@@ -31,6 +31,7 @@ saturation_data.tsv  : n_genomes | mean_unique_families | ci_lower_95 | ci_upper
 
 import csv
 import os
+import sys
 import random
 
 import matplotlib
@@ -38,56 +39,19 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+# cluster_utils lives in the same scripts/ directory
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from cluster_utils import parse_clstr as _parse_clstr_full
 
-# ---------------------------------------------------------------------------
-# Parsing
-# ---------------------------------------------------------------------------
 
 def parse_clstr(clstr_file, species_list):
-    """Parse a cd-hit-est .clstr file and attribute clusters to source(s).
+    """Thin wrapper around cluster_utils.parse_clstr for backward compatibility.
 
-    Species names are matched longest-first to handle names that are
-    substrings of other names (e.g. 'Sp1' vs 'Sp10').
-
-    Parameters
-    ----------
-    clstr_file : str
-        Path to the .clstr file.
-    species_list : list[str]
-        Ordered list of species names matching the header prefixes used during
-        clustering.
-
-    Returns
-    -------
-    species_to_clusters : dict[str, set[int]]
-        Maps each species to the set of cluster IDs it contributed to.
-    existing_clusters : set[int]
-        Cluster IDs that contain at least one REPMASKER_ or CUSTOM_ sequence;
-        these form the x=0 baseline in the saturation curve.
+    Returns only the two values that saturation_plot.py historically used.
     """
-    sorted_species = sorted(species_list, key=len, reverse=True)
-    species_to_clusters = {sp: set() for sp in species_list}
-    existing_clusters = set()
-    current_cluster = None
-
-    with open(clstr_file) as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            if line.startswith(">Cluster"):
-                current_cluster = int(line.split()[1])
-            elif current_cluster is not None and ">" in line:
-                # Extract header: text between ">" and "..."
-                header = line.split(">", 1)[1].split("...")[0]
-                if header.startswith("REPMASKER_") or header.startswith("CUSTOM_"):
-                    existing_clusters.add(current_cluster)
-                else:
-                    for sp in sorted_species:
-                        if header.startswith(sp + "_"):
-                            species_to_clusters[sp].add(current_cluster)
-                            break
-
+    species_to_clusters, existing_clusters, _, _ = _parse_clstr_full(
+        clstr_file, species_list
+    )
     return species_to_clusters, existing_clusters
 
 

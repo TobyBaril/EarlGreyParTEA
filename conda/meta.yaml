@@ -1,5 +1,5 @@
 {% set name = "earlgrey-partea" %}
-{% set version = "0.1.5" %}
+{% set version = "0.1.6" %}
 
 package:
   name: {{ name|lower }}
@@ -26,8 +26,17 @@ requirements:
     - graphviz
     - matplotlib
     - numpy
+    - biopython
+    - pandas
+    - busco >=5.4
+    - mafft
+    - clipkit
+    - fasttree
+    - phykit
 
 test:
+  requires:
+    - pytest
   commands:
     - earlGreyParTEA --help
     - earlGreyParTEA_LibConstruct --help

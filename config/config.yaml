@@ -48,6 +48,28 @@ saturation_permutations: 100  # Number of random genome-addition permutations to
                               # over for the TE family saturation plot. Higher values
                               # give smoother confidence intervals but increase runtime.
 
+# ---------------------------------------------------------------------------
+# Optional analysis modules (v0.1.6+)
+# ---------------------------------------------------------------------------
+
+# Shared/unique TE content analysis
+# Generates stacked bar plots showing TE families and genome coverage that are
+# shared across species vs unique to a single species, coloured by TE class.
+# Supported pipeline modes: 'full' (cluster-based) and 'annotate' (presence/absence).
+# Not applicable in 'libconstruct' mode (no annotation outputs exist).
+run_shared_unique: false
+
+# BUSCO-based phylogenomics
+# Runs BUSCO on each genome, aligns single-copy genes with mafft, trims with
+# clipkit, builds a supermatrix, and infers a tree with FastTree.  Also
+# generates a BUSCO completeness plot and (when run_shared_unique is also true)
+# a phylo-ordered shared/unique plot and a BUSCO vs TE content scatter.
+run_busco_phylo: false
+busco_lineage: ""        # REQUIRED if run_busco_phylo: true  (e.g. "fungi_odb10")
+busco_prefix: "busco"   # Prefix for BUSCO run directory names
+busco_min_occupancy: 0.5  # Min fraction of species a BUSCO gene must be in to be
+                           # included in the supermatrix (0.0–1.0)
+
 # Advanced options (usually not needed)
 # script_dir: "/path/to/earlgrey/scripts"  # Auto-detected if installed via conda/mamba
 
