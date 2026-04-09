@@ -1918,3 +1918,153 @@ Confirm:
 - `saturation_plot.pdf` and `saturation_data.tsv` still exist in `combinedLibraries/`
 - Per-species `summaryFiles/` outputs all present as expected
 
+### Test 8: Full options with 10 genomes
+This is the ultimate test of all new features together on a larger dataset. It will
+require a long runtime, so it can be run as a final confirmation before release, but is not essential for the v0.1.6 release itself.
+
+Make conda environment from development branch:
+```bash
+cd /data/toby/EarlGreyParTEA
+conda-build purge-all
+mamba env remove -n test_016
+conda build conda/
+conda create -n test_016 --use-local earlgrey-partea
+conda activate test_016
+
+ln -s /data/toby/tools/earlgrey_databases/Libraries/famdb/* /data/toby/miniforge3/envs/test_016/share/RepeatMasker/Libraries/famdb/
+ln -s /data/toby/tools/earlgrey_databases/Libraries/RMRB.embl /data/toby/miniforge3/envs/test_016/share/RepeatMasker/Libraries/RMRB.embl
+ln -s /data/toby/tools/earlgrey_databases/Libraries/RMRBSeqs.embl /data/toby/miniforge3/envs/test_016/share/RepeatMasker/Libraries/RMRBSeqs.embl
+cd /data/toby/miniforge3/envs/test_016/share/RepeatMasker/
+/data/toby/miniforge3/envs/test_016/bin/perl ./configure
+
+cd /data/toby/EarlGreyParTEA
+```
+
+Make a directory with a few genomes in and make the config:
+
+```bash
+mkdir -p /data/toby/testDIR/0.1.6tests/8_full/0_genomes/
+
+cp /legserv/NGS_data/Zymoseptoria/Zt_Reference_genomes/19Pangenome_genomes/Arg00/Arg00.fa /data/toby/testDIR/0.1.6tests/8_full/0_genomes/
+cp /legserv/NGS_data/Zymoseptoria/Zt_Reference_genomes/19Pangenome_genomes/Aus01/Aus01.fa /data/toby/testDIR/0.1.6tests/8_full/0_genomes/
+cp /legserv/NGS_data/Zymoseptoria/Zt_Reference_genomes/19Pangenome_genomes/CNR93/CNR93.fa /data/toby/testDIR/0.1.6tests/8_full/0_genomes/
+cp /legserv/NGS_data/Zymoseptoria/Zt_Reference_genomes/19Pangenome_genomes/I93/I93.fa /data/toby/testDIR/0.1.6tests/8_full/0_genomes/
+cp /legserv/NGS_data/Zymoseptoria/Zt_Reference_genomes/19Pangenome_genomes/IPO323/Zymoseptoria_tritici.MG2.dna.toplevel.mt+.fa /data/toby/testDIR/0.1.6tests/8_full/0_genomes/
+cp /legserv/NGS_data/Zymoseptoria/Zt_Reference_genomes/19Pangenome_genomes/ISY92/ISY92.fa /data/toby/testDIR/0.1.6tests/8_full/0_genomes/
+cp /legserv/NGS_data/Zymoseptoria/Zt_Reference_genomes/19Pangenome_genomes/OregS90/OregS90.fa /data/toby/testDIR/0.1.6tests/8_full/0_genomes/
+cp /legserv/NGS_data/Zymoseptoria/Zt_Reference_genomes/19Pangenome_genomes/UR95/UR95.fa /data/toby/testDIR/0.1.6tests/8_full/0_genomes/
+cp /legserv/NGS_data/Zymoseptoria/Zt_Reference_genomes/19Pangenome_genomes/YEQ92/YEQ92.fa /data/toby/testDIR/0.1.6tests/8_full/0_genomes/
+cp /legserv/NGS_data/Zymoseptoria/Zt_Reference_genomes/19Pangenome_genomes/KE94/KE94.fa /data/toby/testDIR/0.1.6tests/8_full/0_genomes/
+
+earlGreyParTEA \
+  --generate-config /data/toby/testDIR/0.1.6tests/8_full/manyGenomesTest.yaml \
+  --genome-dir /data/toby/testDIR/0.1.6tests/8_full/0_genomes/ \
+  --output-dir /data/toby/testDIR/0.1.6tests/8_full/out/
+```
+
+Edit the config to enable lots of things, including slurm!
+
+```yaml
+# EarlGrey Pangenome Pipeline Configuration
+# Full Mode: Complete library construction and annotation
+
+# Input genomes
+genome:
+  Arg00: /data/toby/testDIR/0.1.6tests/8_full/0_genomes/Arg00.fa
+  Aus01: /data/toby/testDIR/0.1.6tests/8_full/0_genomes/Aus01.fa
+  CNR93: /data/toby/testDIR/0.1.6tests/8_full/0_genomes/CNR93.fa
+  I93: /data/toby/testDIR/0.1.6tests/8_full/0_genomes/I93.fa
+  ISY92: /data/toby/testDIR/0.1.6tests/8_full/0_genomes/ISY92.fa
+  KE94: /data/toby/testDIR/0.1.6tests/8_full/0_genomes/KE94.fa
+  OregS90: /data/toby/testDIR/0.1.6tests/8_full/0_genomes/OregS90.fa
+  UR95: /data/toby/testDIR/0.1.6tests/8_full/0_genomes/UR95.fa
+  YEQ92: /data/toby/testDIR/0.1.6tests/8_full/0_genomes/YEQ92.fa
+  Zymoseptoria_tritici_MG2_dna_toplevel_mt_: /data/toby/testDIR/0.1.6tests/8_full/0_genomes/Zymoseptoria_tritici.MG2.dna.toplevel.mt+.fa
+
+species:
+  - Arg00
+  - Aus01
+  - CNR93
+  - I93
+  - ISY92
+  - KE94
+  - OregS90
+  - UR95
+  - YEQ92
+  - Zymoseptoria_tritici_MG2_dna_toplevel_mt_
+
+# Output directory for all results
+output_dir: /data/toby/testDIR/0.1.6tests/8_full/out
+
+# Pipeline mode (do not change for earlGreyParTEA)
+pipeline_mode: "full"
+
+# Initial masking with known repeats (choose ONE or leave both empty)
+repeatmasker_species: ""  # e.g., "fungi", "arthropoda", "viridiplantae"
+custom_library: ""        # path to custom TE library in fasta format
+
+# Library construction parameters
+iterations: 10           # Number of BLAST-extend-align cycles
+flank: 1000             # Flanking basepairs to extract
+max_consensus_seqs: 20  # Max sequences for consensus building
+min_consensus_seqs: 3   # Min sequences required for consensus
+
+# Clustering options (for combining TE libraries from multiple genomes)
+skip_clustering: false          # Set to true to skip clustering (just concatenate)
+clustering_identity: 0.8        # cd-hit sequence identity threshold (0.0-1.0)
+clustering_coverage: 0.8        # cd-hit alignment coverage (0.0-1.0)
+
+# Output options
+softmask: true         # Generate softmasked genome for each input
+margin: false           # Remove short TE sequences (<100bp)
+run_heliano: true       # Run HELIANO for Helitron detection
+
+# Workflow visualization (requires graphviz/dot installed)
+generate_dag: true      # Generate workflow DAG visualizations
+dag_format: "svg"       # Options: "svg", "png", "pdf"
+
+# Saturation analysis options
+saturation_permutations: 100  # Number of random genome-addition permutations to average
+                              # over for the TE family saturation plot. Higher values
+                              # give smoother confidence intervals but increase runtime.
+
+# ---------------------------------------------------------------------------
+# Optional analysis modules (v0.1.6+)
+# ---------------------------------------------------------------------------
+
+# Shared/unique TE content analysis (full and annotate modes only)
+run_shared_unique: true
+
+# BUSCO-based phylogenomics
+run_busco_phylo: true
+busco_lineage: "fungi_odb10"        # REQUIRED if run_busco_phylo: true  (e.g. "fungi_odb10")
+busco_prefix: "busco"   # Prefix for BUSCO run directory names
+busco_min_occupancy: 0.1  # Min fraction of species a gene must appear in (0.0-1.0)
+
+# Advanced options (usually not needed)
+# script_dir: "/path/to/earlgrey/scripts"  # Auto-detected if installed via conda/mamba
+
+# SLURM cluster settings (only used with --slurm flag)
+slurm_partition: "normal.1000h"   # partition/queue to submit to (required with --slurm)
+slurm_account: ""     # account string (leave empty if not required)
+slurm_extra: ""       # any extra sbatch flags, e.g. "--constraint=avx2"
+```
+
+Submit the run, but check dry run first to confirm the DAG looks correct with 10 genomes and both modules enabled:
+
+```bash
+earlGreyParTEA \
+  -c /data/toby/testDIR/0.1.6tests/8_full/manyGenomesTest.yaml \
+  -t 32 \
+  --slurm \
+  --dry-run
+```
+
+This looks okay, let's run it for real!
+
+```bash
+earlGreyParTEA \
+  -c /data/toby/testDIR/0.1.6tests/8_full/manyGenomesTest.yaml \
+  -t 8 \
+  --slurm
+```
