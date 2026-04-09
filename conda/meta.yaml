@@ -1,15 +1,12 @@
 {% set name = "earlgrey-partea" %}
 {% set version = "0.1.6" %}
-{% set sha256 = "" %}  # TODO: update sha256 for v0.1.6 release tag
 
 package:
   name: {{ name|lower }}
   version: {{ version }}
 
 source:
-  url: https://github.com/TobyBaril/EarlGreyParTEA/archive/refs/tags/v{{ version }}.tar.gz
-  sha256: {{ sha256 }}
-  # path: ..  # uncomment for local development builds
+  path: ..
 
 build:
   number: 0
