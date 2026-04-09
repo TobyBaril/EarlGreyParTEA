@@ -20,7 +20,7 @@ requirements:
   run:
     - python
     - earlgrey >=7.1.0
-    - snakemake-minimal
+    - snakemake-minimal >=9.0
     - snakemake-executor-plugin-slurm
     - cd-hit
     - graphviz
