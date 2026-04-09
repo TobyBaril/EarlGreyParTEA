@@ -194,7 +194,7 @@ ParTEA orchestrates TE analysis across multiple genomes with smart parallelizati
                          ╚══════════════╤══════════════════════╝
                                         │
              ┌──────────────────────────┴──────────────────────────┐
-             │                                                       │
+             │                                                     │
   ┌──────────▼──────────────┐               ┌───────────────────────▼────────────┐
   │   run_shared_unique     │               │        run_busco_phylo             │
   │   (optional module)     │  ← species    │        (optional module)           │
