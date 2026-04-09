@@ -278,6 +278,7 @@ rule run_fasttree:
         runtime=240,
     shell:
         """
+        export OMP_NUM_THREADS={threads}
         FastTree -lg -gamma {input.supermatrix} > {output.tree} 2>>{output.tree}.log
         """
 
