@@ -11,6 +11,7 @@ This directory contains technical documentation for developers, maintainers, and
 - Build scripts (meta.yaml, build.sh)
 - Version-agnostic installation details
 - Testing procedures for different EarlGrey versions
+- `snakemake-executor-plugin-slurm` run dependency (required for SLURM mode)
 
 ### For Developers
 
@@ -35,6 +36,10 @@ This directory contains technical documentation for developers, maintainers, and
 ## User-Facing Documentation
 
 For general usage, installation, and getting started, see the main [README.md](../README.md) in the repository root.
+
+New in v0.1.5:
+- **SLURM cluster submission** — `--slurm` flag and related options; see the [SLURM Cluster Submission](../README.md#%EF%B8%8F-slurm-cluster-submission) section in the main README.
+- **Auto-populate configs** — `--genome-dir` and `--from-csv` flags; see [Command-Line Options](../README.md#command-line-options) and [Example Workflows](../README.md#example-workflows) in the main README.
 
 For contribution guidelines, see [CONTRIBUTING.md](../CONTRIBUTING.md).
 

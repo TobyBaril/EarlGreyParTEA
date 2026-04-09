@@ -41,9 +41,9 @@ $CONDA_PREFIX/
         │   └── config.yaml
         ├── rules/
         │   ├── annotate.smk
-        │   ├── annotate_simple.smk
         │   ├── clustering.smk
-        │   └── lib_construct.smk
+        │   ├── lib_construct.smk
+        │   └── saturation.smk
         └── scripts/
             ├── on_start_functions.py
             ├── generate_dag.py
@@ -74,8 +74,9 @@ requirements:
     - python >=3.9
   run:
     - python >=3.9
-    - earlgrey >=7.0.3        # Dependency on base EarlGrey package
-    - snakemake >=8.0
+    - earlgrey >=7.1.0        # Dependency on base EarlGrey package
+    - snakemake-minimal >=9.0
+    - snakemake-executor-plugin-slurm  # Required for --slurm cluster submission
     - cd-hit
     - graphviz               # For DAG visualization
 
