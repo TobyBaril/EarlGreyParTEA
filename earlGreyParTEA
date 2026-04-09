@@ -124,6 +124,19 @@ saturation_permutations: 100  # Number of random genome-addition permutations to
                               # over for the TE family saturation plot. Higher values
                               # give smoother confidence intervals but increase runtime.
 
+# ---------------------------------------------------------------------------
+# Optional analysis modules (v0.1.6+)
+# ---------------------------------------------------------------------------
+
+# Shared/unique TE content analysis (full and annotate modes only)
+run_shared_unique: false
+
+# BUSCO-based phylogenomics
+run_busco_phylo: false
+busco_lineage: ""        # REQUIRED if run_busco_phylo: true  (e.g. "fungi_odb10")
+busco_prefix: "busco"   # Prefix for BUSCO run directory names
+busco_min_occupancy: 0.5  # Min fraction of species a gene must appear in (0.0-1.0)
+
 # Advanced options (usually not needed)
 # script_dir: "/path/to/earlgrey/scripts"  # Auto-detected if installed via conda/mamba
 EOF

@@ -93,13 +93,14 @@ def show_pipeline_mode_visualization(pipeline_mode, config):
             'shared_unique_*_phylo':               {'libconstruct': '✗', 'annotate': '○', 'full': '○'},
         },
         'Optional: BUSCO Phylogenomics': {
-            'run_busco':          {'libconstruct': '○', 'annotate': '○', 'full': '○'},
-            'busco_summary_table':{'libconstruct': '○', 'annotate': '○', 'full': '○'},
-            'extract_busco_aa':   {'libconstruct': '○', 'annotate': '○', 'full': '○'},
-            'align_busco_gene':   {'libconstruct': '○', 'annotate': '○', 'full': '○'},
-            'create_supermatrix': {'libconstruct': '○', 'annotate': '○', 'full': '○'},
-            'run_fasttree':       {'libconstruct': '○', 'annotate': '○', 'full': '○'},
-            'busco_te_qc':        {'libconstruct': '○', 'annotate': '✗', 'full': '○'},
+            'run_busco':               {'libconstruct': '○', 'annotate': '○', 'full': '○'},
+            'busco_summary_table':     {'libconstruct': '○', 'annotate': '○', 'full': '○'},
+            'extract_busco_aa':        {'libconstruct': '○', 'annotate': '○', 'full': '○'},
+            'align_busco_gene':        {'libconstruct': '○', 'annotate': '○', 'full': '○'},
+            'create_supermatrix':      {'libconstruct': '○', 'annotate': '○', 'full': '○'},
+            'run_fasttree':            {'libconstruct': '○', 'annotate': '○', 'full': '○'},
+            'busco_completeness_phylo':{'libconstruct': '○', 'annotate': '○', 'full': '○'},
+            'busco_te_qc':             {'libconstruct': '○', 'annotate': '✗', 'full': '○'},
         },
     }
     
@@ -128,7 +129,7 @@ def show_pipeline_mode_visualization(pipeline_mode, config):
                 elif rule_name in (
                     'run_busco', 'busco_summary_table', 'extract_busco_aa',
                     'align_busco_gene', 'create_supermatrix', 'run_fasttree',
-                    'busco_te_qc',
+                    'busco_completeness_phylo', 'busco_te_qc',
                 ):
                     status = '✓' if run_busco_phylo else '✗'
             

@@ -14,6 +14,7 @@ snakemake.output.tsv      : output TSV path
 
 import os
 import re
+import sys
 
 import matplotlib
 matplotlib.use("Agg")
@@ -94,7 +95,118 @@ def _write_tsv(path, species_order, all_counts):
             )
 
 
+def _read_tsv(tsv_path):
+    """Read an existing busco_completeness.tsv into an all_counts dict."""
+    all_counts = {}
+    with open(tsv_path) as fh:
+        header = fh.readline()  # discard
+        for line in fh:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 6:
+                continue
+            sp = parts[0]
+            all_counts[sp] = {
+                "single":     int(parts[1]),
+                "duplicated": int(parts[2]),
+                "fragmented": int(parts[3]),
+                "missing":    int(parts[4]),
+                "total":      int(parts[5]),
+            }
+    return all_counts
+
+
+def _phylo_order(species_list, tree_path):
+    """Return species in phylogenetic tip order (ladderized, decreasing)."""
+    try:
+        from Bio import Phylo
+    except ImportError:
+        return list(species_list)
+    with open(tree_path) as fh:
+        tree = Phylo.read(fh, "newick")
+    tree.ladderize(reverse=True)
+    tip_names = [t.name for t in tree.get_terminals()]
+    ordered   = [t for t in tip_names if t in set(species_list)]
+    remaining = [s for s in species_list if s not in set(ordered)]
+    return ordered + remaining
+
+
+def _plot(species_order, all_counts, out_pdf, title="BUSCO Completeness Assessment",
+          tree_path=None):
+    """Render and save the horizontal stacked bar chart, with optional cladogram sidebar."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from shared_unique_plot import _draw_cladogram
+
+    n = len(species_order)
+    y = np.arange(n)
+    bar_h = 0.6
+    fig_h = max(4, n * 0.65 + 1.8)
+
+    val_map = {
+        "Complete (single-copy)": "single",
+        "Complete (duplicated)":  "duplicated",
+        "Fragmented":             "fragmented",
+        "Missing":                "missing",
+    }
+
+    if tree_path:
+        fig, (ax_tree, ax_bar) = plt.subplots(
+            1, 2, figsize=(13, fig_h),
+            gridspec_kw={"width_ratios": [1, 3]},
+        )
+        ax_tree.set_ylim(-0.5, n - 0.5)
+        _draw_cladogram(ax_tree, species_order, tree_path)
+    else:
+        fig, ax_bar = plt.subplots(figsize=(10, fig_h))
+
+    left = np.zeros(n)
+    for label in BUSCO_ORDER:
+        key = val_map[label]
+        vals = np.array([all_counts[sp][key] for sp in species_order], dtype=float)
+        totals = np.array(
+            [all_counts[sp]["total"] if all_counts[sp]["total"] > 0 else 1
+             for sp in species_order], dtype=float
+        )
+        pcts = 100.0 * vals / totals
+        ax_bar.barh(y, pcts, left=left, height=bar_h,
+                    color=BUSCO_COLOURS[label], label=label)
+        for i, (pct, lft) in enumerate(zip(pcts, left)):
+            if pct >= 3:
+                ax_bar.text(lft + pct / 2, i, f"{BUSCO_ABBREV[label]}:{pct:.1f}%",
+                            va="center", ha="center", fontsize=7, color="white",
+                            fontweight="bold")
+        left = left + pcts
+
+    ax_bar.set_yticks(y)
+    ax_bar.set_yticklabels(species_order, fontsize=9)
+    ax_bar.set_xlabel("% BUSCO groups", fontsize=10)
+    ax_bar.set_title(title, fontsize=11, fontweight="bold")
+    ax_bar.set_xlim(0, 100)
+    ax_bar.spines[["top", "right"]].set_visible(False)
+    ax_bar.legend(frameon=False, fontsize=8,
+                  bbox_to_anchor=(1.01, 1), loc="upper left", borderaxespad=0)
+
+    fig.tight_layout()
+    fig.savefig(out_pdf, format="pdf", bbox_inches="tight")
+    plt.close(fig)
+
+
 def main():
+    # Phylo-reorder mode: input is existing TSV + tree, output is phylo-ordered PDF only.
+    tree_path = getattr(snakemake.input, "tree", None)   # noqa: F821
+    if tree_path:
+        in_tsv       = snakemake.input.tsv               # noqa: F821
+        out_pdf      = snakemake.output.pdf              # noqa: F821
+        species_list = list(snakemake.params.species)    # noqa: F821
+        os.makedirs(os.path.dirname(os.path.abspath(out_pdf)), exist_ok=True)
+        all_counts    = _read_tsv(in_tsv)
+        species_order = _phylo_order(species_list, tree_path)
+        _plot(species_order, all_counts, out_pdf,
+              title="BUSCO Completeness Assessment (phylogenetic order)",
+              tree_path=tree_path)
+        print(f"[busco_summary] Saved phylo plot → {out_pdf}", flush=True)
+        return
+
+    # Normal mode: parse short_summary files, write TSV, plot alphabetically.
     summaries    = list(snakemake.input.summaries)   # noqa: F821
     species_list = list(snakemake.params.species)    # noqa: F821
     out_pdf      = snakemake.output.pdf              # noqa: F821
@@ -109,50 +221,7 @@ def main():
 
     species_order = sorted(species_list)
     _write_tsv(out_tsv, species_order, all_counts)
-
-    n = len(species_order)
-    y = np.arange(n)
-    bar_h = 0.6
-
-    val_map = {
-        "Complete (single-copy)": "single",
-        "Complete (duplicated)":  "duplicated",
-        "Fragmented":             "fragmented",
-        "Missing":                "missing",
-    }
-
-    fig, ax = plt.subplots(figsize=(10, max(4, n * 0.65 + 1.8)))
-
-    left = np.zeros(n)
-    for label in BUSCO_ORDER:
-        key = val_map[label]
-        vals = np.array([all_counts[sp][key] for sp in species_order], dtype=float)
-        totals = np.array(
-            [all_counts[sp]["total"] if all_counts[sp]["total"] > 0 else 1
-             for sp in species_order], dtype=float
-        )
-        pcts = 100.0 * vals / totals
-        ax.barh(y, pcts, left=left, height=bar_h,
-                color=BUSCO_COLOURS[label], label=label)
-        # Label inside segment if wide enough
-        for i, (pct, lft) in enumerate(zip(pcts, left)):
-            if pct >= 3:
-                ax.text(lft + pct / 2, i, f"{BUSCO_ABBREV[label]}:{pct:.1f}%",
-                        va="center", ha="center", fontsize=7, color="white",
-                        fontweight="bold")
-        left = left + pcts
-
-    ax.set_yticks(y)
-    ax.set_yticklabels(species_order, fontsize=9)
-    ax.set_xlabel("% BUSCO groups", fontsize=10)
-    ax.set_title("BUSCO Completeness Assessment", fontsize=11, fontweight="bold")
-    ax.set_xlim(0, 100)
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(frameon=False, fontsize=8, loc="lower right")
-
-    fig.tight_layout()
-    fig.savefig(out_pdf, format="pdf", bbox_inches="tight")
-    plt.close(fig)
+    _plot(species_order, all_counts, out_pdf)
     print(f"[busco_summary] Saved plot → {out_pdf}", flush=True)
     print(f"[busco_summary] Saved TSV  → {out_tsv}", flush=True)
 

@@ -555,7 +555,7 @@ def _draw_cladogram(ax, species_order, tree_path):
 
     with open(tree_path) as fh:
         tree = Phylo.read(fh, "newick")
-    tree.ladderize()
+    tree.ladderize(reverse=True)
 
     name_to_y = {sp: i for i, sp in enumerate(species_order)}
     if not any(t.name in name_to_y for t in tree.get_terminals()):
@@ -594,6 +594,17 @@ def _draw_cladogram(ax, species_order, tree_path):
                 ax.plot([clade._depth, clade._depth],
                         [min(child_ys), max(child_ys)],
                         color="#444444", lw=1.2, solid_capstyle="round")
+                # Bootstrap value: FastTree outputs SH-like local support (0–1).
+                # Display as a percentage integer at the internal node.
+                # Skip root (no confidence) and trivial 100% nodes to reduce clutter.
+                conf = getattr(clade, "confidence", None)
+                if conf is not None and clade is not tree.root:
+                    pct = int(round(conf * 100))
+                    node_y = np.mean(child_ys)
+                    ax.text(clade._depth + 0.05, node_y,
+                            str(pct),
+                            ha="left", va="center",
+                            fontsize=6, color="#666666")
 
     _draw_clade(tree.root)
     ax.set_xlim(-0.5, max_depth + 0.5)
@@ -640,7 +651,7 @@ def _phylo_order(species_list, tree_path):
         return list(species_list)
     with open(tree_path) as fh:
         tree = Phylo.read(fh, "newick")
-    tree.ladderize()
+    tree.ladderize(reverse=True)
     tip_names = [t.name for t in tree.get_terminals()]
     ordered   = [t for t in tip_names if t in set(species_list)]
     remaining = [s for s in species_list if s not in set(ordered)]

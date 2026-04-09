@@ -1905,7 +1905,7 @@ EOF
 
 earlGreyParTEA \
     -c /data/toby/testDIR/0.1.6tests/7_regression/config.yaml \
-    -t 8
+    -t 24
 
 # Confirm no buscoPhylo or sharedUniqueContent directories were created
 ls /data/toby/testDIR/0.1.6tests/7_regression/out/
@@ -1918,25 +1918,3 @@ Confirm:
 - `saturation_plot.pdf` and `saturation_data.tsv` still exist in `combinedLibraries/`
 - Per-species `summaryFiles/` outputs all present as expected
 
----
-
-### Upload to Anaconda Cloud
-
-```bash
-cd /data/toby/EarlGreyParTEA
-conda build conda/
-anaconda login
-anaconda upload /data/toby/miniforge3/conda-bld/noarch/earlgrey-partea-0.1.6-py_0.conda
-```
-
-Test from the Anaconda channel:
-
-```bash
-mamba create -n partea_016 -c toby_baril_bio earlgrey-partea=0.1.6
-conda activate partea_016
-ln -s /data/toby/tools/earlgrey_databases/Libraries/famdb/* /data/toby/miniforge3/envs/partea_016/share/RepeatMasker/Libraries/famdb/
-ln -s /data/toby/tools/earlgrey_databases/Libraries/RMRB.embl /data/toby/miniforge3/envs/partea_016/share/RepeatMasker/Libraries/RMRB.embl
-ln -s /data/toby/tools/earlgrey_databases/Libraries/RMRBSeqs.embl /data/toby/miniforge3/envs/partea_016/share/RepeatMasker/Libraries/RMRBSeqs.embl
-cd /data/toby/miniforge3/envs/partea_016/share/RepeatMasker/
-/data/toby/miniforge3/envs/partea_016/bin/perl ./configure
-```

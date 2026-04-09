@@ -160,6 +160,14 @@ rule align_busco_gene:
         mafft --auto --quiet {input.faa} > {output.aln}.mafft.fa
         clipkit {output.aln}.mafft.fa -m smart-gap -o {output.aln}
         rm -f {output.aln}.mafft.fa
+        # Failsafe: clipkit exits 0 even when all columns are trimmed away.
+        # If the output has no alignment columns (no non-header lines), remove it
+        # so it is excluded from supermatrix construction.
+        if [ ! -s {output.aln} ] || ! grep -q -v '^>' {output.aln} 2>/dev/null; then
+            echo "[align_busco_gene] WARNING: empty alignment after trimming, removing {output.aln}" >&2
+            rm -f {output.aln}
+            touch {output.aln}  # keep a zero-byte sentinel so Snakemake is satisfied
+        fi
         """
 
 
@@ -217,6 +225,11 @@ rule create_supermatrix:
         pos = 1
 
         for aln_f in aln_files:
+            # Skip zero-byte sentinel files left by align_busco_gene failsafe
+            if os.path.getsize(aln_f) == 0:
+                print(f"[create_supermatrix] Skipping empty alignment: {os.path.basename(aln_f)}",
+                      flush=True)
+                continue
             gene_aln = _read_fasta(aln_f)
             gene_id = os.path.basename(aln_f).replace(".clipkit.fa", "")
             # Determine alignment length from first entry
@@ -270,7 +283,27 @@ rule run_fasttree:
 
 
 # ---------------------------------------------------------------------------
-# 7. BUSCO completeness vs TE content QC scatter
+# 7. BUSCO completeness plot reordered by phylogeny
+# ---------------------------------------------------------------------------
+
+rule busco_completeness_phylo:
+    input:
+        tsv=f"{OUTDIR}/buscoPhylo/busco_completeness.tsv",
+        tree=f"{OUTDIR}/buscoPhylo/species_tree.nwk",
+    output:
+        pdf=f"{OUTDIR}/buscoPhylo/busco_completeness_phylo.pdf",
+    threads: 1
+    resources:
+        mem_mb=2000,
+        runtime=10,
+    params:
+        species=SPECIES_LIST,
+    script:
+        "../scripts/busco_summary_plot.py"
+
+
+# ---------------------------------------------------------------------------
+# 8. BUSCO completeness vs TE content QC scatter
 # ---------------------------------------------------------------------------
 
 rule busco_te_qc:

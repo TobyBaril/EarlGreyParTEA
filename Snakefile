@@ -148,6 +148,7 @@ elif PIPELINE_MODE == "annotate":
                 [
                     f"{OUTDIR}/buscoPhylo/busco_completeness.pdf",
                     f"{OUTDIR}/buscoPhylo/busco_completeness.tsv",
+                    f"{OUTDIR}/buscoPhylo/busco_completeness_phylo.pdf",
                     f"{OUTDIR}/buscoPhylo/species_tree.nwk",
                 ]
                 if RUN_BUSCO_PHYLO else []
@@ -214,6 +215,7 @@ else:  # "full" mode (default)
                 [
                     f"{OUTDIR}/buscoPhylo/busco_completeness.pdf",
                     f"{OUTDIR}/buscoPhylo/busco_completeness.tsv",
+                    f"{OUTDIR}/buscoPhylo/busco_completeness_phylo.pdf",
                     f"{OUTDIR}/buscoPhylo/species_tree.nwk",
                 ]
                 if RUN_BUSCO_PHYLO else []

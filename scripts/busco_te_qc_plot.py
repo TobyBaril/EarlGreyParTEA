@@ -157,7 +157,8 @@ def main():
         for cls in CLASS_ORDER if cls in present_classes
     ]
     ax.legend(handles=class_patches, title="Dominant TE class",
-              frameon=False, fontsize=8, title_fontsize=8)
+              frameon=False, fontsize=8, title_fontsize=8,
+              bbox_to_anchor=(1.01, 1), loc="upper left", borderaxespad=0)
 
     fig.tight_layout()
     fig.savefig(out_pdf, format="pdf", bbox_inches="tight")
