@@ -186,7 +186,29 @@ ParTEA orchestrates TE analysis across multiple genomes with smart parallelizati
                            ┌─────▼──────┐          ┌────────▼───┐
                            │ divergence │          │ divergence │
                            │ charts etc │   ...    │ charts etc │
-                           └────────────┘          └────────────┘
+                           └─────┬──────┘          └────────┬───┘
+                                 └──────────┬───────────────┘
+                                            │
+                         ╔══════════════════╧══════════════════╗
+                         ║    Optional modules (v0.1.6+)       ║
+                         ╚══════════════╤══════════════════════╝
+                                        │
+             ┌──────────────────────────┴──────────────────────────┐
+             │                                                       │
+  ┌──────────▼──────────────┐               ┌───────────────────────▼────────────┐
+  │   run_shared_unique     │               │        run_busco_phylo             │
+  │   (optional module)     │  ← species    │        (optional module)           │
+  │                         │    tree ──────│                                    │
+  │ • cluster-based mode    │               │ • run_busco (per genome)           │
+  │   (full pipeline) or    │               │ • busco_summary_table              │
+  │   presence/absence mode │               │ • extract_busco_aa (per gene)      │
+  │   (annotate pipeline)   │               │ • align_busco_gene (mafft+clipkit) │
+  │                         │               │ • create_supermatrix               │
+  │ Outputs:                │               │ • run_fasttree → species_tree.nwk  │
+  │  shared_unique_families │               │ • busco_completeness(_phylo).pdf   │
+  │  shared_unique_coverage │               │ • busco_te_qc.pdf                  │
+  │  *_phylo variants       │               └────────────────────────────────────┘
+  └─────────────────────────┘
 ```
 
 ### Optional Steps
@@ -195,9 +217,9 @@ ParTEA orchestrates TE analysis across multiple genomes with smart parallelizati
 - **🔄 Clustering** (`skip_clustering: true/false`) - Merge similar TEs across genomes
 - **🎭 Initial masking** (`repeatmasker_species` or `custom_library`) - Pre-mask known repeats
 - **📈 TE saturation analysis** (`saturation_permutations: N`) - Accumulation curve showing TE family discovery rate across genomes (full/libconstruct modes)
-- **� Shared/unique TE content** (`run_shared_unique: true`) - Bar charts of shared vs unique TE families across genomes (full/annotate modes)
+- **🔀 Shared/unique TE content** (`run_shared_unique: true`) - Bar charts of shared vs unique TE families across genomes (full/annotate modes)
 - **🌳 BUSCO phylogenomics** (`run_busco_phylo: true`) - Species tree inference with BUSCO single-copy orthologues; BUSCO completeness and TE QC plots
-- **�📊 DAG visualization** (`generate_dag: true/false`) - Generate workflow graphs
+- **📊 DAG visualization** (`generate_dag: true/false`) - Generate workflow graphs
 
 **📈 See detailed workflow visualization:** [Example Rulegraph](docs/example_rulegraph.svg)
 
