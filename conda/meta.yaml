@@ -1,14 +1,12 @@
 {% set name = "earlgrey-partea" %}
-{% set version = "0.1.5" %}
-{% set sha256 = "973d36b54a94ed70f50a2ad4252cafa88662b26f9efb5306fd6e635224347d22" %}
+{% set version = "0.1.6" %}
 
 package:
   name: {{ name|lower }}
   version: {{ version }}
 
 source:
-  url: https://github.com/TobyBaril/EarlGreyParTEA/archive/refs/tags/v{{ version }}.tar.gz
-  sha256: {{ sha256 }}
+  path: ..
 
 build:
   number: 0
@@ -22,14 +20,23 @@ requirements:
   run:
     - python
     - earlgrey >=7.1.0
-    - snakemake-minimal
+    - snakemake-minimal >=9.0
     - snakemake-executor-plugin-slurm
     - cd-hit
     - graphviz
     - matplotlib
     - numpy
+    - biopython
+    - pandas
+    - busco >=5.4
+    - mafft
+    - clipkit
+    - fasttree
+    - phykit
 
 test:
+  requires:
+    - pytest
   commands:
     - earlGreyParTEA --help
     - earlGreyParTEA_LibConstruct --help

@@ -63,6 +63,8 @@ def show_pipeline_mode_visualization(pipeline_mode, config):
     repeatmasker_species = config.get('repeatmasker_species', '')
     custom_library = config.get('custom_library', '')
     skip_clustering = config.get('skip_clustering', False)
+    run_shared_unique = config.get('run_shared_unique', False)
+    run_busco_phylo = config.get('run_busco_phylo', False)
     
     # Define rule groups and their activity per mode
     # ✓ = active, ✗ = inactive, ○ = conditional (depends on config)
@@ -84,7 +86,22 @@ def show_pipeline_mode_visualization(pipeline_mode, config):
             'calculate_divergence': {'libconstruct': '✗', 'annotate': '✓', 'full': '✓'},
             'generate_charts': {'libconstruct': '✗', 'annotate': '✓', 'full': '✓'},
             'softmasked_genome': {'libconstruct': '✗', 'annotate': '○', 'full': '○'},
-        }
+        },
+        'Optional: Shared/Unique TE Content': {
+            'shared_unique_plot (cluster)':        {'libconstruct': '✗', 'annotate': '✗', 'full': '○'},
+            'shared_unique_pa_plot (presence/abs)':{'libconstruct': '✗', 'annotate': '○', 'full': '✗'},
+            'shared_unique_*_phylo':               {'libconstruct': '✗', 'annotate': '○', 'full': '○'},
+        },
+        'Optional: BUSCO Phylogenomics': {
+            'run_busco':               {'libconstruct': '○', 'annotate': '○', 'full': '○'},
+            'busco_summary_table':     {'libconstruct': '○', 'annotate': '○', 'full': '○'},
+            'extract_busco_aa':        {'libconstruct': '○', 'annotate': '○', 'full': '○'},
+            'align_busco_gene':        {'libconstruct': '○', 'annotate': '○', 'full': '○'},
+            'create_supermatrix':      {'libconstruct': '○', 'annotate': '○', 'full': '○'},
+            'run_fasttree':            {'libconstruct': '○', 'annotate': '○', 'full': '○'},
+            'busco_completeness_phylo':{'libconstruct': '○', 'annotate': '○', 'full': '○'},
+            'busco_te_qc':             {'libconstruct': '○', 'annotate': '✗', 'full': '○'},
+        },
     }
     
     print("\n" + "="*60)
@@ -103,16 +120,31 @@ def show_pipeline_mode_visualization(pipeline_mode, config):
                     status = '✓' if softmask else '✗'
                 elif rule_name == 'repeatmasker_initial':
                     status = '✓' if (repeatmasker_species or custom_library) else '✗'
+                elif rule_name in (
+                    'shared_unique_plot (cluster)',
+                    'shared_unique_pa_plot (presence/abs)',
+                    'shared_unique_*_phylo',
+                ):
+                    status = '✓' if run_shared_unique else '✗'
+                elif rule_name in (
+                    'run_busco', 'busco_summary_table', 'extract_busco_aa',
+                    'align_busco_gene', 'create_supermatrix', 'run_fasttree',
+                    'busco_completeness_phylo', 'busco_te_qc',
+                ):
+                    status = '✓' if run_busco_phylo else '✗'
             
             # Add note for clustering behavior
             note = ""
             if rule_name == 'clustering' and status == '✓' and skip_clustering:
                 note = " (concatenate mode)"
+            # Add note for presence/absence shared_unique in annotate mode
+            if rule_name == 'shared_unique_*_phylo' and status == '✓':
+                note = " (requires run_busco_phylo: true)"
             
             print(f"  {status} {rule_name}{note}")
     
     print("\n" + "="*60)
-    print("Legend: ✓ = active  ✗ = inactive")
+    print("Legend: ✓ = active  ✗ = inactive  ○ = enabled via config")
     print("="*60 + "\n")
 
 # --------------------------------------------------
@@ -145,6 +177,11 @@ def validate_parameters(config, outfile = None):
         'repeatmasker_species': ("", None),
         'custom_library': ("", None),
         'saturation_permutations': (100, None),
+        'run_shared_unique': (False, None),
+        'run_busco_phylo': (False, None),
+        'busco_lineage': ("", None),
+        'busco_prefix': ("busco", None),
+        'busco_min_occupancy': (0.5, None),
     }
 
     msg_header("Parameter values")
@@ -234,7 +271,50 @@ def validate_parameters(config, outfile = None):
         if not Path(annotation_lib).exists():
             msg_error(f"Annotation library not found: {annotation_lib}")
         msg_info(f"Using annotation library: {os.path.basename(annotation_lib)}")
-    
+
+    # Optional module: shared/unique TE content
+    run_shared_unique = config.get('run_shared_unique', False)
+    if run_shared_unique:
+        if pipeline_mode == 'libconstruct':
+            msg_error(
+                "run_shared_unique=true requires annotation outputs (GFF files) "
+                "which are not produced in 'libconstruct' mode. "
+                "Use 'full' or 'annotate' mode instead."
+            )
+        elif pipeline_mode == 'annotate':
+            msg_warn(
+                "run_shared_unique=true with pipeline_mode='annotate': "
+                "presence/absence strategy will be used (no .clstr file). "
+                "Homologous families annotated under different names will "
+                "appear as unique in each species."
+            )
+            msg_info("Shared/unique TE content analysis: ENABLED (presence/absence mode)")
+        else:
+            msg_info("Shared/unique TE content analysis: ENABLED (cluster-based mode)")
+    else:
+        msg_info("Shared/unique TE content analysis: disabled (set run_shared_unique: true to enable)")
+
+    # Optional module: BUSCO phylogenomics
+    run_busco_phylo = config.get('run_busco_phylo', False)
+    if run_busco_phylo:
+        busco_lineage = config.get('busco_lineage', '')
+        if not busco_lineage:
+            msg_error(
+                "run_busco_phylo=true requires 'busco_lineage' to be set "
+                "(e.g. busco_lineage: fungi_odb10). "
+                "See https://busco.ezlab.org/busco_userguide.html for available lineages."
+            )
+        min_occ = config.get('busco_min_occupancy', 0.5)
+        if not (0.0 < min_occ <= 1.0):
+            msg_error(
+                f"busco_min_occupancy={min_occ} is out of range. "
+                "Must be a fraction between 0 (exclusive) and 1 (inclusive)."
+            )
+        msg_info(f"BUSCO phylogenomics: ENABLED (lineage={busco_lineage}, "
+                 f"min_occupancy={min_occ:.0%})")
+    else:
+        msg_info("BUSCO phylogenomics: disabled (set run_busco_phylo: true to enable)")
+
     # Show visual pipeline mode overview
     show_pipeline_mode_visualization(pipeline_mode, config)
 

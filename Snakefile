@@ -37,6 +37,13 @@ MARGIN = "yes" if (_margin_val is True or _margin_val == "yes") else "no"
 PIPELINE_MODE = config.get("pipeline_mode", "full")
 ANNOTATION_LIB = config.get("annotation_library", "")
 
+# Optional analysis modules
+RUN_SHARED_UNIQUE = config.get("run_shared_unique", False)
+RUN_BUSCO_PHYLO   = config.get("run_busco_phylo",   False)
+BUSCO_LINEAGE     = config.get("busco_lineage",     "")
+BUSCO_PREFIX      = config.get("busco_prefix",      "busco")
+BUSCO_MIN_OCC     = config.get("busco_min_occupancy", 0.5)
+
 # DAG visualization settings
 GENERATE_DAG = config.get("generate_dag", True)  # Generate DAG by default
 DAG_FORMAT = config.get("dag_format", "svg")  # svg, png, or pdf
@@ -53,6 +60,14 @@ if PIPELINE_MODE in ["full", "libconstruct"]:
 if PIPELINE_MODE in ["full", "annotate"]:
     # Annotation rules needed
     include: "rules/annotate.smk"
+
+# Optional: shared/unique TE content analysis
+if RUN_SHARED_UNIQUE and PIPELINE_MODE in ["full", "annotate"]:
+    include: "rules/shared_unique_content.smk"
+
+# Optional: BUSCO phylogenomics
+if RUN_BUSCO_PHYLO:
+    include: "rules/busco_phylo.smk"
 
 onstart:
     # Display tea art
@@ -81,7 +96,8 @@ if PIPELINE_MODE == "libconstruct":
             # Library construction only - request the clustered library
             f"{OUTDIR}/combinedLibraries/combined_all_species.clstrd.fa",
             f"{OUTDIR}/combinedLibraries/saturation_plot.pdf",
-            f"{OUTDIR}/combinedLibraries/saturation_data.tsv"
+            f"{OUTDIR}/combinedLibraries/saturation_data.tsv",
+            # shared/unique not applicable for libconstruct (no annotation)
 
 elif PIPELINE_MODE == "annotate":
     rule all:
@@ -116,7 +132,37 @@ elif PIPELINE_MODE == "annotate":
                 "{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}.softmasked.fasta",
                 outdir=OUTDIR,
                 species=SPECIES_LIST
-            ) if SOFTMASK is True or SOFTMASK == 'yes' else []
+            ) if SOFTMASK is True or SOFTMASK == 'yes' else [],
+            # Optional: shared/unique (presence/absence mode in annotate)
+            *(
+                [
+                    f"{OUTDIR}/sharedUniqueContent/shared_unique_families.pdf",
+                    f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.pdf",
+                    f"{OUTDIR}/sharedUniqueContent/shared_unique_families.tsv",
+                    f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.tsv",
+                ]
+                if RUN_SHARED_UNIQUE else []
+            ),
+            # Optional: BUSCO phylo
+            *(
+                [
+                    f"{OUTDIR}/buscoPhylo/busco_completeness.pdf",
+                    f"{OUTDIR}/buscoPhylo/busco_completeness.tsv",
+                    f"{OUTDIR}/buscoPhylo/busco_completeness_phylo.pdf",
+                    f"{OUTDIR}/buscoPhylo/species_tree.nwk",
+                ]
+                if RUN_BUSCO_PHYLO else []
+            ),
+            # Optional: phylo-ordered shared/unique + QC scatter (both modules)
+            *(
+                [
+                    f"{OUTDIR}/sharedUniqueContent/shared_unique_families_phylo.pdf",
+                    f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage_phylo.pdf",
+                    f"{OUTDIR}/buscoPhylo/busco_te_qc.pdf",
+                    f"{OUTDIR}/buscoPhylo/busco_te_qc.tsv",
+                ]
+                if (RUN_SHARED_UNIQUE and RUN_BUSCO_PHYLO) else []
+            )
 
 else:  # "full" mode (default)
     rule all:
@@ -153,7 +199,37 @@ else:  # "full" mode (default)
                 species=SPECIES_LIST
             ) if SOFTMASK is True or SOFTMASK == 'yes' else [],
             f"{OUTDIR}/combinedLibraries/saturation_plot.pdf",
-            f"{OUTDIR}/combinedLibraries/saturation_data.tsv"
+            f"{OUTDIR}/combinedLibraries/saturation_data.tsv",
+            # Optional: cluster-based shared/unique
+            *(
+                [
+                    f"{OUTDIR}/sharedUniqueContent/shared_unique_families.pdf",
+                    f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.pdf",
+                    f"{OUTDIR}/sharedUniqueContent/shared_unique_families.tsv",
+                    f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.tsv",
+                ]
+                if RUN_SHARED_UNIQUE else []
+            ),
+            # Optional: BUSCO phylogenomics
+            *(
+                [
+                    f"{OUTDIR}/buscoPhylo/busco_completeness.pdf",
+                    f"{OUTDIR}/buscoPhylo/busco_completeness.tsv",
+                    f"{OUTDIR}/buscoPhylo/busco_completeness_phylo.pdf",
+                    f"{OUTDIR}/buscoPhylo/species_tree.nwk",
+                ]
+                if RUN_BUSCO_PHYLO else []
+            ),
+            # Optional: phylo-ordered shared/unique + QC scatter (both active)
+            *(
+                [
+                    f"{OUTDIR}/sharedUniqueContent/shared_unique_families_phylo.pdf",
+                    f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage_phylo.pdf",
+                    f"{OUTDIR}/buscoPhylo/busco_te_qc.pdf",
+                    f"{OUTDIR}/buscoPhylo/busco_te_qc.tsv",
+                ]
+                if (RUN_SHARED_UNIQUE and RUN_BUSCO_PHYLO) else []
+            )
 
 
 # Rule to symlink user-provided library for annotation mode
