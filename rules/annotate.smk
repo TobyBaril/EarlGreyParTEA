@@ -85,30 +85,41 @@ rule merge_repeats:
         """
         mkdir -p {params.outdir}
         
-        # Try loose merge first
+        # Try loose merge first.
+        # Use '|| true' so Snakemake's set -euo pipefail does not abort the shell
+        # block on a non-zero exit from rcMergeRepeatsLoose (e.g. when LTR_FINDER
+        # fails on a particular genome). Fallback logic checks file existence,
+        # mirroring the behaviour of the earlGrey standalone script.
         {params.script_dir}/rcMergeRepeatsLoose -f {input.genome} -s {wildcards.species} \
             -d {params.outdir} -u {input.out} -q {input.tbl} -t {threads} \
-            -b {input.dict} -m {params.margin} {params.helitron_param}
+            -b {input.dict} -m {params.margin} {params.helitron_param} || true
         
-        # Fix GFF formatting
+        # Fix GFF formatting if loose merge succeeded
         if [ -f "{output.gff}" ]; then
             awk '{{OFS="\t"}}{{print $1, $2, $3, $4, $5, $6, $7, $8, toupper($9)}}' {output.gff} > {output.gff}.tmp
             mv {output.gff}.tmp {output.gff}
         fi
         
-        # If loose merge failed, try strict merge
+        # If loose merge did not produce the expected BED, try strict merge
         if [ ! -f "{output.bed}" ]; then
-            echo "Loose merge failed, trying strict merge..."
+            echo "[WARNING] Loose merge did not produce output for {wildcards.species}, trying strict merge..."
             {params.script_dir}/rcMergeRepeats -f {input.genome} -s {wildcards.species} \
                 -d {wildcards.outdir}/{wildcards.species}_EarlGrey/{wildcards.species}_mergedRepeats \
                 -u {input.out} -q {input.tbl} -t {threads} \
-                -b {input.dict} -m {params.margin} {params.helitron_param}
+                -b {input.dict} -m {params.margin} {params.helitron_param} || true
             
-            # Move strict merge results to expected location if loose merge failed
+            # Move strict merge results into the looseMerge location expected by downstream rules
             if [ -f "{wildcards.outdir}/{wildcards.species}_EarlGrey/{wildcards.species}_mergedRepeats/{wildcards.species}.filteredRepeats.bed" ]; then
                 mkdir -p {params.outdir}
                 mv {wildcards.outdir}/{wildcards.species}_EarlGrey/{wildcards.species}_mergedRepeats/{wildcards.species}.filteredRepeats.* {params.outdir}/
             fi
+        fi
+        
+        # Final check — fail with a clear message if neither merge produced output
+        if [ ! -f "{output.bed}" ]; then
+            echo "[ERROR] Both loose and strict merge failed for {wildcards.species}."
+            echo "        Check the RepeatMasker .out file: {input.out}"
+            exit 1
         fi
         """
 
