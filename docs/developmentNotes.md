@@ -2068,3 +2068,5 @@ earlGreyParTEA \
   -t 8 \
   --slurm
 ```
+
+The many genomes test passed with no errors, and all expected outputs were produced. The shared/unique plots show the 10 species in the same order as the tree, and the BUSCO vs TE QC plot shows points coloured by dominant TE class. This confirms that all new features work together as expected on a larger dataset.
