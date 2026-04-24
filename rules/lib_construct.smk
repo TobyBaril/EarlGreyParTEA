@@ -40,7 +40,7 @@ rule repeatmasker_warmup:
             echo "Warming up RepeatMasker general library cache..." >&2
             tmp=$(mktemp -d)
             printf '>dummy\\nATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG\\n' > "$tmp/dummy.fa"
-            RepeatMasker -lib "$tmp/dummy.fa" -norna -no_is -pa 1 -dir "$tmp" "$tmp/dummy.fa" > /dev/null 2>&1 || true
+            RepeatMasker -lib "$tmp/dummy.fa" -no_is -pa 1 -dir "$tmp" "$tmp/dummy.fa" > /dev/null 2>&1 || true
             rm -rf "$tmp"
         fi
         """
@@ -117,7 +117,7 @@ rule repeatmasker:
         """
         mkdir -p {params.outdir}
         cd {params.outdir}
-        RepeatMasker -species {params.rep_spec} -norna -no_is -lcambig -s -a \
+        RepeatMasker -species {params.rep_spec} -no_is -lcambig -s -a \
             -pa {params.rm_threads} -dir {params.outdir} $(realpath {input.genome})
         """
 
@@ -139,7 +139,7 @@ rule repeatmasker_custom:
         """
         mkdir -p {params.outdir}
         cd {params.outdir}
-        RepeatMasker -lib $(realpath {input.lib}) -norna -no_is -lcambig -s -a \
+        RepeatMasker -lib $(realpath {input.lib}) -no_is -lcambig -s -a \
             -pa {params.rm_threads} -dir {params.outdir} $(realpath {input.genome})
         """
 

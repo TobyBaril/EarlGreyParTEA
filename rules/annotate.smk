@@ -30,7 +30,7 @@ rule repeatmasker_annotation:
         """
         mkdir -p {params.outdir}
         cd {params.outdir}
-        RepeatMasker -lib $(realpath {input.library}) -norna -no_is -lcambig -s -a \
+        RepeatMasker -lib $(realpath {input.library}) -no_is -lcambig -s -a \
             -pa {params.rm_threads} -dir {params.outdir} $(realpath {input.genome})
         """
 

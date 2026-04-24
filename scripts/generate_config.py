@@ -199,7 +199,7 @@ busco_min_occupancy: 0.5  # Min fraction of species a gene must appear in (0.0-1
 # script_dir: "/path/to/earlgrey/scripts"  # Auto-detected if installed via conda/mamba
 
 # SLURM cluster settings (only used with --slurm flag)
-slurm_partition: ""   # partition/queue to submit to (required with --slurm)
+slurm_partition: ""   # partition/queue to submit to (required when using --slurm; can be set here instead of --slurm-partition)
 slurm_account: ""     # account string (leave empty if not required)
 slurm_extra: ""       # any extra sbatch flags, e.g. "--constraint=avx2"
 """
@@ -263,7 +263,7 @@ busco_min_occupancy: 0.5
 # script_dir: "/path/to/earlgrey/scripts"  # Auto-detected if installed via conda/mamba
 
 # SLURM cluster settings (only used with --slurm flag)
-slurm_partition: ""   # partition/queue to submit to (required with --slurm)
+slurm_partition: ""   # partition/queue to submit to (required when using --slurm; can be set here instead of --slurm-partition)
 slurm_account: ""     # account string (leave empty if not required)
 slurm_extra: ""       # any extra sbatch flags, e.g. "--constraint=avx2"
 """
@@ -321,7 +321,7 @@ busco_min_occupancy: 0.5  # Min fraction of species a gene must appear in (0.0-1
 # script_dir: "/path/to/earlgrey/scripts"  # Auto-detected if installed via conda/mamba
 
 # SLURM cluster settings (only used with --slurm flag)
-slurm_partition: ""   # partition/queue to submit to (required with --slurm)
+slurm_partition: ""   # partition/queue to submit to (required when using --slurm; can be set here instead of --slurm-partition)
 slurm_account: ""     # account string (leave empty if not required)
 slurm_extra: ""       # any extra sbatch flags, e.g. "--constraint=avx2"
 """
