@@ -2069,4 +2069,78 @@ earlGreyParTEA \
   --slurm
 ```
 
-The many genomes test passed with no errors, and all expected outputs were produced. The shared/unique plots show the 10 species in the same order as the tree, and the BUSCO vs TE QC plot shows points coloured by dominant TE class. This confirms that all new features work together as expected on a larger dataset.
+The many genomes test passed with no errors, and all expected outputs were produced. The shared/unique plots show the 10 species in the same order as the tree, and the BUSCO vs TE QC plot shows points coloured by dominant TE class. This confirms the pipeline is working correctly for v0.1.6.
+
+---
+
+## Release v0.1.7 Feature Updates
+
+### Removal of `-norna` flag from all RepeatMasker calls
+
+**Problem:** All RepeatMasker invocations in the pipeline carried the `-norna` flag, which suppresses masking of small RNA genes and related repeats (snRNA, scRNA, tRNA etc.). This was undesirable for a general-purpose TE annotation pipeline — RNA-derived repeats such as SINEs are legitimate TE families and excluding them from masking introduces a systematic gap in the annotation.
+
+**Fix:** Removed `-norna` from every RepeatMasker call in the pipeline:
+
+- `rules/lib_construct.smk` — removed from `repeatmasker` (species-database initial masking) and `repeatmasker_custom` (custom-library initial masking)
+- `rules/annotate.smk` — removed from `repeatmasker_annotation` (final annotation masking against the curated TE library)
+
+The warmup dummy run (`repeatmasker_warmup`) is not affected because it uses `-lib` with a short random sequence that will never match any annotated repeats regardless of `-norna`.
+
+**Files changed:**
+- `rules/lib_construct.smk`
+- `rules/annotate.smk`
+
+---
+
+### Extended `repeatmasker_warmup` to pre-build species-specific library cache
+
+**Background:** The v0.1.3 `repeatmasker_warmup` rule only pre-built the general RepeatMasker BLAST cache. When a taxon-specific library is requested (e.g. `repeatmasker_species: "7215"` for Drosophila), RepeatMasker must also build a species-specific BLAST database cache at `Libraries/CONS-Dfam_withRBRM_3.9/<species>/` the first time it runs. This cache build writes several files:
+
+- `refineableHash.dat` — a Perl `Storable` hash mapping each TE family to its refinability status
+- `speciesMeta.pm` — Perl module with metadata about the species library
+- `specieslib` + BLAST DB files (`specieslib.nhr`, `.nin`, `.nsq`, etc.) — the BLAST-indexed library
+
+If multiple genome jobs start simultaneously before this cache exists, each job tries to build it in parallel. All jobs create their own `<species>.working/` staging directory, but only one can win the final rename; all others fail immediately.
+
+**Additional complication — incomplete cache from a previous OOM kill:** If a previous run was killed mid-build (e.g. by a SLURM cgroup OOM signal during `makeblastdb`), the `<species>/` directory may be left in a partially-built state containing the BLAST `.nhr`/`.nin`/`.nsq` files but lacking `refineableHash.dat` and `speciesMeta.pm`. RepeatMasker's cache-validation logic checks for `*.nhr` first; if found, it treats the cache as valid and tries to immediately retrieve `refineableHash.dat` with Perl `Storable::retrieve()`. This fails with a crash rather than triggering a rebuild, causing every parallel genome job to fail.
+
+**Root cause of observed failures (April 2026 drosophila run):**
+1. **April 24** — OOM kill during `makeblastdb` building the Drosophila species library (2,541 sequences). Left `7215/` with BLAST DB files only; no `refineableHash.dat`.
+2. **April 30 re-run** — `7215/` had `.nhr` files → RepeatMasker's cache check passed → immediate crash on `retrieve("refineableHash.dat")` for all parallel jobs.
+
+**Fix:** The `repeatmasker_warmup` rule now also pre-builds the species-specific cache before any parallel genome jobs start. The new logic:
+
+1. Checks whether the species cache directory exists but is missing `refineableHash.dat` (incomplete from a previous aborted run). If so, **deletes the directory** to force a fresh build. RepeatMasker will not do this itself because it considers `.nhr` a sufficient validity indicator.
+2. Removes any stale `<species>.working/` directory from a previous aborted parallel build.
+3. Runs a single dummy RepeatMasker job (`-species <spec>` on a one-sequence FASTA) to trigger the full cache build — including `refineableHash.dat`, `speciesMeta.pm`, and the BLAST DB.
+4. **Verifies** that `refineableHash.dat` now exists. If not, the warmup rule exits with a non-zero status and a clear error message, preventing the pipeline from proceeding with a broken cache.
+
+The warmup `mem_mb` was increased from 4,000 to 32,000 MB and `runtime` from 30 to 120 minutes to accommodate the large species library build (the Drosophila `7215` library is ~2,500 sequences and requires a correspondingly large `makeblastdb` run).
+
+**Files changed:**
+- `rules/lib_construct.smk` — extended `repeatmasker_warmup` shell block; added `params: rep_spec=REPSPEC`; increased `mem_mb` and `runtime` resources
+
+---
+
+### RepeatModeler robustness for small genomes (`-genomeSampleSizeMax`)
+
+**Problem:** RepeatModeler builds consensus sequences through iterative rounds of BLAST searches against an unmasked sample of the genome. In each round it draws a random sample of up to 81 Mbp (the default `genomeSampleSizeMax`). For genomes smaller than this threshold, and particularly in later rounds where much of the genome has been masked, RepeatModeler may fail because there are insufficient unmasked bases to generate any sample at all. The error typically appears as an exit-code-1 failure deep inside a RepeatModeler round with no informative message.
+
+**Fix:** Added a genome-size check at the start of the `repeatmodeler` shell block. The genome BLAST database created by `build_db` is queried with `blastdbcmd -info`, which returns the total number of bases. If the total is below 81,000,000 bp, `-genomeSampleSizeMax <size>` is appended to the RepeatModeler command, capping the sample target to the actual genome size so RepeatModeler can always find enough sequence to proceed.
+
+The check uses the existing BLAST database (which RepeatModeler requires as input anyway) and adds no extra files or steps. Three guard conditions are applied before the comparison — non-empty result, numeric-only string, integer comparison — so that any unexpected `blastdbcmd` output causes the check to be silently skipped rather than aborting the job.
+
+**Files changed:**
+- `rules/lib_construct.smk` — added `blastdbcmd -info` size check and conditional `SAMPLE_FLAG` in `repeatmodeler` shell block
+
+---
+
+### Verification checklist for v0.1.7
+
+- [ ] Run pipeline with `repeatmasker_species` set on a species with a large library (e.g. Drosophila `7215`). Confirm warmup builds a complete `7215/` cache including `refineableHash.dat` before any parallel genome jobs start.
+- [ ] Manually corrupt the `7215/` cache (delete `refineableHash.dat`, leave `.nhr` files). Re-run. Confirm warmup detects the incomplete cache, removes the directory, and rebuilds it cleanly.
+- [ ] Run pipeline with a genome < 81 Mbp. Confirm RepeatModeler receives `-genomeSampleSizeMax <size>` in the job log (stderr message: `Small genome detected`).
+- [ ] Run pipeline with a genome > 81 Mbp. Confirm RepeatModeler receives no extra flag.
+- [ ] Confirm no RNA-family annotations appear as masked in RepeatMasker output that would previously have been suppressed by `-norna` (e.g. check for `RNA` or `srpRNA` class entries in `.out` files).
+- [ ] Local mode regression: confirm all three changes do not break a standard local run on a previously working dataset.
+

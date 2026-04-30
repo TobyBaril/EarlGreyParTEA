@@ -20,28 +20,68 @@ elif REPSPEC:
 
 rule repeatmasker_warmup:
     """
-    Pre-build the RepeatMasker general library BLAST cache before parallel genome
-    jobs start. On a freshly configured conda environment, the cache does not yet
-    exist. Running multiple RepeatMasker processes simultaneously causes a race
-    where each tries to write the same cache directory and all but one fail.
-    Running a single warmup job first ensures the cache is in place so that all
-    parallel RepeatMasker jobs can proceed without conflict.
+    Pre-build the RepeatMasker general and species-specific library BLAST caches
+    before parallel genome jobs start. On a freshly configured conda environment,
+    the caches do not yet exist. Running multiple RepeatMasker processes
+    simultaneously causes a race where each tries to write the same cache
+    directory and all but one fail. Running a single warmup job first ensures
+    both caches are fully in place (including refineableHash.dat and
+    speciesMeta.pm) so that all parallel RepeatMasker jobs can proceed without
+    conflict.
     """
     output:
         sentinel=touch(f"{OUTDIR}/.repeatmasker_cache_ready")
     threads: 1
     resources:
-        mem_mb=4000,
-        runtime=30
+        mem_mb=32000,
+        runtime=120
+    params:
+        rep_spec=REPSPEC
     shell:
         """
         RM_SHARE=$(which RepeatMasker | sed 's|/bin/RepeatMasker$|/share/RepeatMasker|')
+
+        # Warm up the general library cache if not already built
         if ! find "$RM_SHARE/Libraries" -maxdepth 2 -type d -name "general" 2>/dev/null | grep -q .; then
             echo "Warming up RepeatMasker general library cache..." >&2
             tmp=$(mktemp -d)
             printf '>dummy\\nATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG\\n' > "$tmp/dummy.fa"
             RepeatMasker -lib "$tmp/dummy.fa" -no_is -pa 1 -dir "$tmp" "$tmp/dummy.fa" > /dev/null 2>&1 || true
             rm -rf "$tmp"
+        fi
+
+        # Warm up the species-specific library cache if a species is specified
+        # This prevents a race condition where parallel jobs all try to build
+        # the same species cache (including refineableHash.dat / speciesMeta.pm)
+        # simultaneously, causing all but one to fail.
+        if [ -n "{params.rep_spec}" ]; then
+            SPECIES_WORD=$(echo "{params.rep_spec}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_')
+            CACHE_PARENT="$RM_SHARE/Libraries/CONS-Dfam_withRBRM_3.9"
+            CACHE_DIR="$CACHE_PARENT/$SPECIES_WORD"
+
+            # If the cache directory exists but refineableHash.dat is missing, it is
+            # incomplete (e.g. a previous OOM-killed makeblastdb run). RepeatMasker
+            # considers *.nhr sufficient to skip rebuilding, so we must delete the
+            # incomplete directory to force a fresh build.
+            if [ -d "$CACHE_DIR" ] && [ ! -f "$CACHE_DIR/refineableHash.dat" ]; then
+                echo "Incomplete species cache detected (missing refineableHash.dat). Removing $CACHE_DIR to force rebuild..." >&2
+                rm -rf "$CACHE_DIR"
+            fi
+            # Also remove any stale .working directory left by a previous aborted run.
+            rm -rf "$CACHE_DIR.working" 2>/dev/null || true
+
+            if [ ! -f "$CACHE_DIR/refineableHash.dat" ]; then
+                echo "Warming up RepeatMasker species library cache for {params.rep_spec}..." >&2
+                tmp=$(mktemp -d)
+                printf '>dummy\\nATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG\\n' > "$tmp/dummy.fa"
+                RepeatMasker -species "{params.rep_spec}" -no_is -pa 1 -dir "$tmp" "$tmp/dummy.fa" > /dev/null 2>&1 || true
+                rm -rf "$tmp"
+                if [ ! -f "$CACHE_DIR/refineableHash.dat" ]; then
+                    echo "ERROR: species cache build failed — refineableHash.dat still missing in $CACHE_DIR" >&2
+                    exit 1
+                fi
+                echo "Species cache built successfully." >&2
+            fi
         fi
         """
 
@@ -210,7 +250,21 @@ rule repeatmodeler:
         """
         mkdir -p {params.rm_dir}
         cd {params.rm_dir}
-        RepeatModeler -threads {threads} -database {params.db_dir}/{params.db_name}
+
+        # Check genome size; small genomes can fail in later RepeatModeler rounds
+        # because there are insufficient unmasked bases to generate a sample.
+        # -genomeSampleSizeMax caps the sample to the actual genome size.
+        GENOME_SIZE=$(blastdbcmd -db {params.db_dir}/{params.db_name} -info 2>/dev/null | \
+            grep "total bases" | sed 's/.*[; ]\([0-9,]*\) total bases.*/\1/' | tr -d ',')
+        SAMPLE_FLAG=""
+        if [ -n "$GENOME_SIZE" ] && echo "$GENOME_SIZE" | grep -qE '^[0-9]+$'; then
+            if [ "$GENOME_SIZE" -lt 81000000 ]; then
+                echo "Small genome detected ($GENOME_SIZE bp): setting -genomeSampleSizeMax $GENOME_SIZE" >&2
+                SAMPLE_FLAG="-genomeSampleSizeMax $GENOME_SIZE"
+            fi
+        fi
+
+        RepeatModeler -threads {threads} -database {params.db_dir}/{params.db_name} $SAMPLE_FLAG
         """
 
 rule testrainer:

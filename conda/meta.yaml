@@ -1,12 +1,13 @@
 {% set name = "earlgrey-partea" %}
-{% set version = "0.1.6" %}
+{% set version = "0.1.7.dev" %}
 
 package:
   name: {{ name|lower }}
   version: {{ version }}
 
 source:
-  path: ..
+  git_url: ".."
+  git_rev: HEAD
 
 build:
   number: 0
