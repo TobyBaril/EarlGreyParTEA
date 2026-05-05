@@ -31,6 +31,8 @@ rule repeatmasker_warmup:
     """
     output:
         sentinel=touch(f"{OUTDIR}/.repeatmasker_cache_ready")
+    log:
+        f"{OUTDIR}/.repeatmasker_warmup.log"
     threads: 1
     resources:
         mem_mb=32000,
@@ -39,6 +41,7 @@ rule repeatmasker_warmup:
         rep_spec=REPSPEC
     shell:
         """
+        exec > {log} 2>&1
         RM_SHARE=$(which RepeatMasker | sed 's|/bin/RepeatMasker$|/share/RepeatMasker|')
 
         # Warm up the general library cache if not already built
@@ -102,6 +105,8 @@ rule prep_genome:
         gen_prep="{OUTDIR}/{species}_EarlGrey/{species}.prep",
         gen_dict="{OUTDIR}/{species}_EarlGrey/{species}.dict",
         backup="{OUTDIR}/{species}_EarlGrey/{species}.bak.gz"
+    log:
+        "{OUTDIR}/{species}_EarlGrey/{species}.prep_genome.log"
     threads: 1
     resources:
         mem_mb=4000,
@@ -110,6 +115,7 @@ rule prep_genome:
         script_dir=SCRIPT_DIR
     shell:
         """
+        exec > {log} 2>&1
         # Create backup of original genome in output directory
         # Remove any existing .orig file first (in case of rerun with read-only permissions)
         rm -f {output.gen_prep}.orig
@@ -145,6 +151,8 @@ rule repeatmasker:
         _cache=f"{OUTDIR}/.repeatmasker_cache_ready"
     output:
         masked="{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.prep.masked"
+    log:
+        "{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.repeatmasker.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
     resources:
         mem_mb=lambda wildcards, attempt: 16000 * attempt,
@@ -155,6 +163,7 @@ rule repeatmasker:
         rm_threads=lambda wildcards, threads: max(1, threads // 4)  # RepeatMasker -pa value (uses 4x this)
     shell:
         """
+        exec > {log} 2>&1
         mkdir -p {params.outdir}
         cd {params.outdir}
         RepeatMasker -species {params.rep_spec} -no_is -lcambig -s -a \
@@ -168,6 +177,8 @@ rule repeatmasker_custom:
         _cache=f"{OUTDIR}/.repeatmasker_cache_ready"
     output:
         masked="{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.prep.masked"
+    log:
+        "{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.repeatmasker.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
     resources:
         mem_mb=lambda wildcards, attempt: 16000 * attempt,
@@ -177,6 +188,7 @@ rule repeatmasker_custom:
         rm_threads=lambda wildcards, threads: max(1, threads // 4)  # RepeatMasker -pa value (uses 4x this)
     shell:
         """
+        exec > {log} 2>&1
         mkdir -p {params.outdir}
         cd {params.outdir}
         RepeatMasker -lib $(realpath {input.lib}) -no_is -lcambig -s -a \
@@ -186,6 +198,8 @@ rule repeatmasker_custom:
 rule extract_repeatmasker_library:
     output:
         replib=f"{{outdir}}/{REPSPEC}.RepeatMasker.lib"
+    log:
+        f"{{outdir}}/{REPSPEC}.extract_repeatmasker_library.log"
     params:
         repspec=REPSPEC,
         outdir=OUTDIR
@@ -195,6 +209,7 @@ rule extract_repeatmasker_library:
         runtime=30
     shell:
         """
+        exec > {log} 2>&1
         # Determine RepeatMasker library path
         if [[ $(which RepeatMasker) == *"bin"* ]]; then
             libpath="$(which RepeatMasker | sed 's|bin/RepeatMasker|share/RepeatMasker/Libraries/famdb/|')"
@@ -217,6 +232,8 @@ rule build_db:
         db="{outdir}/{species}_EarlGrey/{species}_Database/{species}.nhr",
         nin="{outdir}/{species}_EarlGrey/{species}_Database/{species}.nin",
         nsq="{outdir}/{species}_EarlGrey/{species}_Database/{species}.nsq"
+    log:
+        "{outdir}/{species}_EarlGrey/{species}_Database/{species}.build_db.log"
     threads: 1
     resources:
         mem_mb=lambda wildcards, attempt: 8000 * attempt,
@@ -226,6 +243,7 @@ rule build_db:
         name="{species}"
     shell:
         """
+        exec > {log} 2>&1
         mkdir -p {params.outdir}
         cd {params.outdir}
         BuildDatabase -name {params.name} {input.masked}
@@ -235,9 +253,12 @@ rule repeatmodeler:
     input:
         db="{outdir}/{species}_EarlGrey/{species}_Database/{species}.nhr",
         nin="{outdir}/{species}_EarlGrey/{species}_Database/{species}.nin",
-        nsq="{outdir}/{species}_EarlGrey/{species}_Database/{species}.nsq"
+        nsq="{outdir}/{species}_EarlGrey/{species}_Database/{species}.nsq",
+        prep="{outdir}/{species}_EarlGrey/{species}.prep"
     output:
         families="{outdir}/{species}_EarlGrey/{species}_Database/{species}-families.fa"
+    log:
+        "{outdir}/{species}_EarlGrey/{species}_RepeatModeler/{species}.repeatmodeler.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
     resources:
         mem_mb=lambda wildcards, attempt: 32000 * attempt,
@@ -248,20 +269,39 @@ rule repeatmodeler:
         db_name="{species}"
     shell:
         """
+        exec > {log} 2>&1
         mkdir -p {params.rm_dir}
         cd {params.rm_dir}
 
-        # Check genome size; small genomes can fail in later RepeatModeler rounds
-        # because there are insufficient unmasked bases to generate a sample.
-        # -genomeSampleSizeMax caps the sample to the actual genome size.
-        GENOME_SIZE=$(blastdbcmd -db {params.db_dir}/{params.db_name} -info 2>/dev/null | \
-            grep "total bases" | sed 's/.*[; ]\([0-9,]*\) total bases.*/\1/' | tr -d ',')
+        # Compute sampable genome size: sum of contigs >= 40 kb only.
+        # RepeatModeler discards contigs shorter than 40 kb during sampling, so using
+        # the total genome size would overestimate the sequence available per round.
+        GENOME_SIZE=$(awk '/^>/{{if(len>=40000)sum+=len; len=0; next}}{{len+=length($0)}} END{{if(len>=40000)sum+=len; print sum+0}}' {input.prep})
+        echo "Samplable genome size (contigs >= 40 kb): $GENOME_SIZE bp"
+
+        # Set -genomeSampleSizeMax to the highest RECON round threshold the genome
+        # can support. Thresholds are cumulative across rounds (r2=3M, r3=9M, r4=27M,
+        # r5=81M, r6=243M), so the sampable size must cover all rounds up to the cap:
+        #   >= 363M (3+9+27+81+243): no cap  -> all 6 rounds
+        #   >= 120M (3+9+27+81):     cap 81M  -> rounds 1-5
+        #   >=  39M (3+9+27):        cap 27M  -> rounds 1-4
+        #   >=  12M (3+9):           cap  9M  -> rounds 1-3
+        #   <   12M:                 cap  3M  -> rounds 1-2
         SAMPLE_FLAG=""
-        if [ -n "$GENOME_SIZE" ] && echo "$GENOME_SIZE" | grep -qE '^[0-9]+$'; then
-            if [ "$GENOME_SIZE" -lt 81000000 ]; then
-                echo "Small genome detected ($GENOME_SIZE bp): setting -genomeSampleSizeMax $GENOME_SIZE" >&2
-                SAMPLE_FLAG="-genomeSampleSizeMax $GENOME_SIZE"
-            fi
+        if [ "$GENOME_SIZE" -ge 363000000 ] 2>/dev/null; then
+            : # genome large enough for all rounds; use RepeatModeler default
+        elif [ "$GENOME_SIZE" -ge 120000000 ] 2>/dev/null; then
+            echo "Capping at round 5 (-genomeSampleSizeMax 81000000)"
+            SAMPLE_FLAG="-genomeSampleSizeMax 81000000"
+        elif [ "$GENOME_SIZE" -ge 39000000 ] 2>/dev/null; then
+            echo "Capping at round 4 (-genomeSampleSizeMax 27000000)"
+            SAMPLE_FLAG="-genomeSampleSizeMax 27000000"
+        elif [ "$GENOME_SIZE" -ge 12000000 ] 2>/dev/null; then
+            echo "Capping at round 3 (-genomeSampleSizeMax 9000000)"
+            SAMPLE_FLAG="-genomeSampleSizeMax 9000000"
+        else
+            echo "Capping at round 2 (-genomeSampleSizeMax 3000000)"
+            SAMPLE_FLAG="-genomeSampleSizeMax 3000000"
         fi
 
         RepeatModeler -threads {threads} -database {params.db_dir}/{params.db_name} $SAMPLE_FLAG
@@ -274,6 +314,8 @@ rule testrainer:
     output:
         strained="{outdir}/{species}_EarlGrey/{species}_strainer/{species}-families.fa.strained",
         summary="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}-families.fa.strained"
+    log:
+        "{outdir}/{species}_EarlGrey/{species}_strainer/{species}.testrainer.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
     resources:
         mem_mb=lambda wildcards, attempt: config.get("total_memory_mb", 32000 * attempt),
@@ -288,6 +330,7 @@ rule testrainer:
         strainer_dir="{outdir}/{species}_EarlGrey/{species}_strainer"
     shell:
         """
+        exec > {log} 2>&1
         mkdir -p {params.strainer_dir}
         cd {params.strainer_dir}
         {params.script_dir}/TEstrainer/TEstrainer_for_earlGrey.sh \

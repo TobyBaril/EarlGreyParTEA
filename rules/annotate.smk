@@ -19,6 +19,8 @@ rule repeatmasker_annotation:
         masked="{outdir}/{species}_EarlGrey/{species}_RepeatMasker_Against_Custom_Library/{species}.prep.masked",
         out="{outdir}/{species}_EarlGrey/{species}_RepeatMasker_Against_Custom_Library/{species}.prep.out",
         tbl="{outdir}/{species}_EarlGrey/{species}_RepeatMasker_Against_Custom_Library/{species}.prep.tbl"
+    log:
+        "{outdir}/{species}_EarlGrey/{species}_RepeatMasker_Against_Custom_Library/{species}.repeatmasker_annotation.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
     resources:
         mem_mb=lambda wildcards, attempt: 16000 * attempt,
@@ -28,6 +30,7 @@ rule repeatmasker_annotation:
         rm_threads=lambda wildcards, threads: max(1, threads // 4)  # RepeatMasker -pa value (uses 4x this)
     shell:
         """
+        exec > {log} 2>&1
         mkdir -p {params.outdir}
         cd {params.outdir}
         RepeatMasker -lib $(realpath {input.library}) -no_is -lcambig -s -a \
@@ -39,6 +42,8 @@ rule heliano_detection:
         genome="{outdir}/{species}_EarlGrey/{species}.prep"
     output:
         helitron_gff="{outdir}/{species}_EarlGrey/{species}_heliano/RC.representative.gff"
+    log:
+        "{outdir}/{species}_EarlGrey/{species}_heliano/{species}.heliano_detection.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 32)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 32))
     resources:
         mem_mb=lambda wildcards, attempt: 8000 * attempt,
@@ -47,6 +52,7 @@ rule heliano_detection:
         heliano_dir="{outdir}/{species}_EarlGrey/{species}_heliano"
     shell:
         """
+        exec > {log} 2>&1
         if [ "{HELIANO}" == "yes" ]; then
             mkdir -p {params.heliano_dir}
             cd {params.heliano_dir}
@@ -72,6 +78,8 @@ rule merge_repeats:
         bed="{outdir}/{species}_EarlGrey/{species}_mergedRepeats/looseMerge/{species}.filteredRepeats.bed",
         gff="{outdir}/{species}_EarlGrey/{species}_mergedRepeats/looseMerge/{species}.filteredRepeats.gff",
         summary="{outdir}/{species}_EarlGrey/{species}_mergedRepeats/looseMerge/{species}.filteredRepeats.summary"
+    log:
+        "{outdir}/{species}_EarlGrey/{species}_mergedRepeats/{species}.merge_repeats.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 16)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 16))
     resources:
         mem_mb=lambda wildcards, attempt: 8000 * attempt,
@@ -83,6 +91,7 @@ rule merge_repeats:
         helitron_param=lambda wildcards, input: f"-e {input.helitron_gff}" if HELIANO == "yes" and os.path.getsize(input.helitron_gff if HELIANO == "yes" else "/dev/null") > 0 else ""
     shell:
         """
+        exec > {log} 2>&1
         mkdir -p {params.outdir}
         
         # Try loose merge first.
@@ -130,6 +139,8 @@ rule generate_summary_charts:
     output:
         pie="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}.summaryPie.pdf",
         highLevelCount="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}.highLevelCount.txt"
+    log:
+        "{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}.generate_summary_charts.log"
     threads: 1
     resources:
         mem_mb=4000,
@@ -139,6 +150,7 @@ rule generate_summary_charts:
         outdir="{outdir}/{species}_EarlGrey/{species}_summaryFiles"
     shell:
         """
+        exec > {log} 2>&1
         mkdir -p {params.outdir}
         cd {params.outdir}
         {params.script_dir}/autoPie.sh -i {input.summary} -t {input.tbl} \
@@ -153,6 +165,8 @@ rule calculate_divergence:
     output:
         div_gff="{outdir}/{species}_EarlGrey/{species}_RepeatLandscape/{species}.filteredRepeats.withDivergence.gff",
         div_summary="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}_divergence_summary_table.tsv"
+    log:
+        "{outdir}/{species}_EarlGrey/{species}_RepeatLandscape/{species}.calculate_divergence.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 16)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 16))
     resources:
         mem_mb=lambda wildcards, attempt: 8000 * attempt,
@@ -164,6 +178,7 @@ rule calculate_divergence:
         divcalc_tmp="/tmp/egdiv_{species}",
     shell:
         """
+        exec > {log} 2>&1
         mkdir -p {params.landscape_dir}
         cd {params.landscape_dir}
         
@@ -205,6 +220,8 @@ rule sweep_up_files:
     output:
         summary_bed="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}.filteredRepeats.bed",
         summary_gff="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}.filteredRepeats.gff"
+    log:
+        "{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}.sweep_up_files.log"
     threads: 1
     resources:
         mem_mb=2000,
@@ -213,6 +230,7 @@ rule sweep_up_files:
         summary_dir="{outdir}/{species}_EarlGrey/{species}_summaryFiles"
     shell:
         """
+        exec > {log} 2>&1
         # Copy final results to summary directory
         cp {input.bed} {output.summary_bed}
         cp {input.gff} {output.summary_gff}
@@ -224,12 +242,15 @@ rule generate_softmasked_genome:
         backup="{outdir}/{species}_EarlGrey/{species}.bak.gz"
     output:
         softmasked="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}.softmasked.fasta"
+    log:
+        "{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}.generate_softmasked_genome.log"
     threads: 1
     resources:
         mem_mb=8000,
         runtime=60
     shell:
         """
+        exec > {log} 2>&1
         if [ "{SOFTMASK}" == "yes" ]; then
             gunzip -c {input.backup} > {input.backup}.tmp
             bedtools maskfasta -fi {input.backup}.tmp -bed {input.bed} \

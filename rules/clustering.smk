@@ -7,6 +7,8 @@ rule cluster_all_species:
     output:
         combined="{outdir}/combinedLibraries/combined_all_species.clstrd.fa",
         clstr="{outdir}/combinedLibraries/combined_all_species.clstrd.fa.clstr"
+    log:
+        "{outdir}/combinedLibraries/cluster_all_species.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 32))  # cd-hit: scales 1-32 threads (single job, runs once)
     resources:
         mem_mb=lambda wildcards, attempt: 32000 * attempt,
@@ -20,7 +22,7 @@ rule cluster_all_species:
         cluster_coverage=config.get("clustering_coverage", 0.8)
     run:
         import os
-        shell("mkdir -p {params.outdir}/combinedLibraries")
+        shell("mkdir -p {params.outdir}/combinedLibraries >> " + str(log) + " 2>&1")
         
         # Define combined file path
         combined_file = f"{params.outdir}/combinedLibraries/combined_all_species.fa"
@@ -57,22 +59,22 @@ rule cluster_all_species:
         # Cluster or skip based on config
         if params.skip_clustering:
             # Just copy/rename the combined file as the output (no clustering)
-            shell(f"cp {combined_file} {{output.combined}}")
-            shell(f"rm -f {combined_file}")
+            shell(f"cp {combined_file} {{output.combined}} >> " + str(log) + " 2>&1")
+            shell(f"rm -f {combined_file} >> " + str(log) + " 2>&1")
             # cd-hit-est is not run, so no .clstr is produced.
             # Touch an empty sentinel so Snakemake dependency tracking still works.
             # The saturation_plot script detects an empty file and uses a fallback.
-            shell("touch {output.clstr}")
+            shell("touch {output.clstr} >> " + str(log) + " 2>&1")
         else:
             # Run cd-hit-est clustering with config parameters
             shell(f"cd-hit-est -d 0 -aS {{params.cluster_coverage}} -c {{params.cluster_identity}} "
                   f"-G 0 -g 1 -b 500 -r 1 "
                   f"-i {combined_file} -o {{output.combined}} "
-                  f"-M {{resources.mem_mb}} -T {{threads}}")
+                  f"-M {{resources.mem_mb}} -T {{threads}} >> " + str(log) + " 2>&1")
             
             # Clean up intermediate files
-            shell(f"rm -f {combined_file}")
+            shell(f"rm -f {combined_file} >> " + str(log) + " 2>&1")
         
         # Ensure file is fully written to disk before dependent jobs start
-        shell("sync")
+        shell("sync >> " + str(log) + " 2>&1")
         shell("sleep 2")

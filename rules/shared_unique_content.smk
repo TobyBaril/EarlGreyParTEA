@@ -43,6 +43,8 @@ if PIPELINE_MODE == "full" and not RUN_BUSCO_PHYLO:
             fam_tsv=f"{OUTDIR}/sharedUniqueContent/shared_unique_families.tsv",
             cov_pdf=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.pdf",
             cov_tsv=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.tsv",
+        log:
+            f"{OUTDIR}/sharedUniqueContent/shared_unique_plot.log"
         threads: 1
         resources:
             mem_mb=lambda wildcards, attempt: 8000 * attempt,
@@ -76,6 +78,8 @@ elif PIPELINE_MODE == "full" and RUN_BUSCO_PHYLO:
             cov_tsv=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.tsv",
             fam_phylo_pdf=f"{OUTDIR}/sharedUniqueContent/shared_unique_families_phylo.pdf",
             cov_phylo_pdf=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage_phylo.pdf",
+        log:
+            f"{OUTDIR}/sharedUniqueContent/shared_unique_plot.log"
         threads: 1
         resources:
             mem_mb=lambda wildcards, attempt: 8000 * attempt,
@@ -105,6 +109,8 @@ elif PIPELINE_MODE == "annotate" and not RUN_BUSCO_PHYLO:
             fam_tsv=f"{OUTDIR}/sharedUniqueContent/shared_unique_families.tsv",
             cov_pdf=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.pdf",
             cov_tsv=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.tsv",
+        log:
+            f"{OUTDIR}/sharedUniqueContent/shared_unique_plot.log"
         threads: 1
         resources:
             mem_mb=lambda wildcards, attempt: 8000 * attempt,
@@ -137,6 +143,8 @@ elif PIPELINE_MODE == "annotate" and RUN_BUSCO_PHYLO:
             cov_tsv=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.tsv",
             fam_phylo_pdf=f"{OUTDIR}/sharedUniqueContent/shared_unique_families_phylo.pdf",
             cov_phylo_pdf=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage_phylo.pdf",
+        log:
+            f"{OUTDIR}/sharedUniqueContent/shared_unique_plot.log"
         threads: 1
         resources:
             mem_mb=lambda wildcards, attempt: 8000 * attempt,

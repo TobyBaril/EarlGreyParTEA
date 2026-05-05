@@ -64,14 +64,51 @@ ParTEA extends EarlGrey with features designed for multi-genome comparative TE a
 - 🖥️ **SLURM Cluster Submission** *(new in v0.1.5)* — Pass `--slurm --slurm-partition <partition>` to dispatch each rule as an individual `sbatch` job via `snakemake-executor-plugin-slurm`. Per-job CPUs, memory, and wall-time are declared in each rule and enforced by SLURM. Concurrency is controlled by `--slurm-jobs` rather than `--threads`.
 - 🔀 **Shared/Unique TE Content** *(new in v0.1.6)* — Optional module (`run_shared_unique: true`) that produces stacked bar charts identifying which TE families are core (shared across all genomes), partially shared, or unique to individual genomes. In full pipeline mode, uses cd-hit cluster membership for accurate cross-genome comparison. Optionally reordered by species tree.
 - 🌳 **BUSCO Phylogenomics** *(new in v0.1.6)* — Optional module (`run_busco_phylo: true`) that runs BUSCO, aligns and trims single-copy orthologues, concatenates a supermatrix, and infers a species tree with FastTree. Outputs a phylo-ordered BUSCO completeness chart with cladogram sidebar and a TE content vs BUSCO QC scatter plot.
+- 📋 **Per-rule log files** *(new in v0.1.7)* — Every rule now writes its tool output to a dedicated log file placed alongside its output directory. Only Snakemake progress messages are printed to the terminal during a run; all RepeatMasker, RepeatModeler, HELIANO, and other tool output is captured in per-rule logs for easier post-hoc debugging.
+- 🛡️ **RepeatModeler small-genome robustness** *(improved in v0.1.7)* — The pipeline now computes the samplable genome size (contigs ≥ 40 kb only) and automatically sets `-genomeSampleSizeMax` to prevent RepeatModeler from attempting a round for which insufficient unmasked sequence remains. See [Troubleshooting](#troubleshooting) for details.
 
 ---
 
-## 🆕 Changes in Latest Release (v0.1.6)
+## 🆕 Changes in Latest Release (v0.1.7)
+
+### Per-rule log files
+
+All rules across all six rule files now write their tool output to a dedicated log file placed alongside the relevant output directory (e.g. `{species}.repeatmodeler.log` next to `{species}_RepeatModeler/`). Only Snakemake's own job progress messages are printed to the terminal during a run.
+
+This makes it much easier to locate warnings or diagnose failures after a run without scrolling through thousands of lines of mixed terminal output.
+
+### RepeatModeler small-genome robustness
+
+RepeatModeler can crash on small or fragmented genomes when a later round tries to sample more sequence than is available. The pipeline now prevents this by:
+
+1. Computing the **samplable genome size** — the sum of all contig lengths ≥ 40 kb (RepeatModeler discards shorter contigs during sampling, so the total genome size overestimates what is available).
+2. Setting `-genomeSampleSizeMax` to the per-round sample size for the highest RECON round the genome can support, based on cumulative sample totals across rounds:
+
+| Samplable size | `-genomeSampleSizeMax` | Rounds run |
+|---|---|---|
+| ≥ 363 Mbp | none (default) | 1–6 |
+| ≥ 120 Mbp | `81000000` | 1–5 |
+| ≥ 39 Mbp | `27000000` | 1–4 |
+| ≥ 12 Mbp | `9000000` | 1–3 |
+| < 12 Mbp | `3000000` | 1–2 |
+
+### Extended `repeatmasker_warmup` — species-specific cache
+
+When `repeatmasker_species` is set, RepeatMasker must build a species-specific BLAST database cache before any genome jobs start. Previously this cache was built by the first parallel genome job; if multiple jobs started simultaneously each would attempt to build it and all but one would fail. The warmup rule now pre-builds this cache serially before any per-genome jobs are dispatched.
+
+The warmup also detects and repairs incomplete caches left by a previous OOM-killed run (which can cause all subsequent jobs to crash even though the BLAST database files appear to exist).
+
+### Removal of `-norna` flag
+
+The `-norna` flag was removed from all RepeatMasker calls. This flag suppressed masking of RNA-derived repeats (snRNA, scRNA, tRNA, SINEs); removing it ensures these legitimate TE families are included in the annotation.
+
+---
+
+## Previous Release (v0.1.6)
 
 ### New optional modules
 
-Two new analysis modules are available (both disabled by default):
+Two new analysis modules were added (both disabled by default):
 
 | Module | Config key | Description |
 |--------|-----------|-------------|
@@ -104,7 +141,7 @@ behaviour of `--generate-config` is unchanged.
 - [What is ParTEA?](#what-is-partea)
 - [Citation](#-citation)
 - [ParTEA Features](#-partea-features)
-- [Changes in Latest Release](#-changes-in-latest-release-v016)
+- [Changes in Latest Release](#-changes-in-latest-release-v017)
 - [Pipeline Overview](#-pipeline-overview)
 - [Installation](#-installation)
   - [Via conda/mamba](#via-condamamba-recommended---party-in-a-package)
@@ -889,7 +926,7 @@ Or follow the manual configuration steps in the [Installation](#-installation) s
 
 - Fresh EarlGrey installations only include Dfam partition 0 (minimal database)
 - Full TE annotation requires partitions 0-16 for comprehensive coverage
-- The download is ~10GB and takes time, so it's not included by default
+- The download is HUGE (hundreds of GB) and takes time, so it's not included by default
 
 **After configuring:**
 
@@ -961,6 +998,34 @@ For conda installations, this is typically:
 ```yaml
 script_dir: "$CONDA_PREFIX/share/earlgrey-7.1.0-0/scripts"  # Adjust version
 ```
+
+### RepeatModeler crashes with "FastaDB::compact - Error could not locate file"
+
+This error occurs when RepeatModeler tries to start a new sampling round but the genome has already been exhausted in previous rounds:
+
+```
+FastaDB::compact - Error could not locate file .../round-4/sampleDB-4.fa!
+```
+
+RepeatModeler decides whether to continue to the next round, but does not check whether there is enough remaining unmasked sequence to sample. On small or highly fragmented genomes, the genome can be exhausted before the final round.
+
+**From v0.1.7, ParTEA automatically prevents this** by setting `-genomeSampleSizeMax` based on the samplable genome size (contigs ≥ 40 kb only; shorter contigs are discarded by RepeatModeler internally). The per-round sample sizes accumulate across rounds:
+
+| Cumulative sample needed | `-genomeSampleSizeMax` set | Rounds run |
+|---|---|---|
+| ≥ 363 Mbp samplable | none (RepeatModeler default) | 1–6 |
+| ≥ 120 Mbp samplable | `81000000` | 1–5 |
+| ≥ 39 Mbp samplable | `27000000` | 1–4 |
+| ≥ 12 Mbp samplable | `9000000` | 1–3 |
+| < 12 Mbp samplable | `3000000` | 1–2 |
+
+**If you see this error on v0.1.6 or earlier**, upgrade to v0.1.7. If you need to rerun a genome that crashed mid-run, clean the RepeatModeler working directory first:
+
+```bash
+rm -rf {output_dir}/{species}_EarlGrey/{species}_RepeatModeler/
+```
+
+Then rerun with `--rerun-incomplete`.
 
 ### DAG visualization not generated
 

@@ -20,6 +20,8 @@ rule saturation_plot:
     output:
         plot=f"{OUTDIR}/combinedLibraries/saturation_plot.pdf",
         table=f"{OUTDIR}/combinedLibraries/saturation_data.tsv",
+    log:
+        f"{OUTDIR}/combinedLibraries/saturation_plot.log"
     threads: 1
     resources:
         mem_mb=4000,
