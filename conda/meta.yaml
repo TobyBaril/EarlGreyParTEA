@@ -6,8 +6,8 @@ package:
   version: {{ version }}
 
 source:
-  git_url: ".."
-  git_rev: HEAD
+  url: https://github.com/TobyBaril/EarlGreyParTEA/archive/refs/tags/v{{ version }}.tar.gz
+  sha256: REPLACE_WITH_RELEASE_TARBALL_SHA256
 
 build:
   number: 0
