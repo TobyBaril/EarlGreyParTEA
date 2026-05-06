@@ -7,7 +7,7 @@ package:
 
 source:
   url: https://github.com/TobyBaril/EarlGreyParTEA/archive/refs/tags/v{{ version }}.tar.gz
-  sha256: REPLACE_WITH_RELEASE_TARBALL_SHA256
+  sha256: e3e8306f70bfd3f17995892936610320272fcb45bcdc648107ca0487317e3ea4
 
 build:
   number: 0
