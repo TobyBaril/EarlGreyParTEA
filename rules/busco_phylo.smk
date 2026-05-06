@@ -38,6 +38,8 @@ rule fetch_busco_db:
     in parallel."""
     output:
         sentinel=f"{OUTDIR}/buscoPhylo/.busco_db_ready",
+    log:
+        f"{OUTDIR}/buscoPhylo/fetch_busco_db.log"
     params:
         lineage=BUSCO_LINEAGE,
         db_path=f"{OUTDIR}/buscoPhylo/busco_db",
@@ -47,6 +49,7 @@ rule fetch_busco_db:
         runtime=120,
     shell:
         """
+        exec > {log} 2>&1
         mkdir -p {params.db_path}
         busco --download {params.lineage} --download_path {params.db_path}
         touch {output.sentinel}
@@ -64,6 +67,8 @@ rule run_busco:
     output:
         summary=f"{{outdir}}/{{species}}_EarlGrey/{{species}}_busco/short_summary.specific.{BUSCO_LINEAGE}.{{species}}_busco.txt",
         busco_dir=directory("{outdir}/{species}_EarlGrey/{species}_busco"),
+    log:
+        "{outdir}/{species}_EarlGrey/{species}_busco/{species}.run_busco.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 16)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 16))
     resources:
         mem_mb=lambda wildcards, attempt: 16000 * attempt,
@@ -75,6 +80,7 @@ rule run_busco:
         db_path=f"{OUTDIR}/buscoPhylo/busco_db",
     shell:
         """
+        exec > {log} 2>&1
         mkdir -p {params.outdir}
         cd {params.outdir}
         busco \
@@ -104,6 +110,8 @@ rule busco_summary_table:
     output:
         pdf=f"{OUTDIR}/buscoPhylo/busco_completeness.pdf",
         tsv=f"{OUTDIR}/buscoPhylo/busco_completeness.tsv",
+    log:
+        f"{OUTDIR}/buscoPhylo/busco_summary_table.log"
     threads: 1
     resources:
         mem_mb=4000,
@@ -128,6 +136,8 @@ checkpoint extract_busco_aa:
     output:
         gene_dir=directory(f"{OUTDIR}/buscoPhylo/busco_genes"),
         occupancy_tsv=f"{OUTDIR}/buscoPhylo/busco_gene_occupancy.tsv",
+    log:
+        f"{OUTDIR}/buscoPhylo/extract_busco_aa.log"
     threads: 1
     resources:
         mem_mb=4000,
@@ -150,12 +160,15 @@ rule align_busco_gene:
         faa=f"{OUTDIR}/buscoPhylo/busco_genes/{{gene_id}}.faa",
     output:
         aln=f"{OUTDIR}/buscoPhylo/aligned/{{gene_id}}.clipkit.fa",
+    log:
+        f"{OUTDIR}/buscoPhylo/aligned/{{gene_id}}.align.log"
     threads: 1
     resources:
         mem_mb=2000,
         runtime=30,
     shell:
         """
+        exec > {log} 2>&1
         mkdir -p $(dirname {output.aln})
         mafft --auto --quiet {input.faa} > {output.aln}.mafft.fa
         clipkit {output.aln}.mafft.fa -m smart-gap -o {output.aln}
@@ -191,6 +204,8 @@ rule create_supermatrix:
     output:
         supermatrix=f"{OUTDIR}/buscoPhylo/supermatrix.fa",
         partition=f"{OUTDIR}/buscoPhylo/supermatrix.partitions",
+    log:
+        f"{OUTDIR}/buscoPhylo/create_supermatrix.log"
     threads: 1
     resources:
         mem_mb=8000,
@@ -272,6 +287,8 @@ rule run_fasttree:
         supermatrix=f"{OUTDIR}/buscoPhylo/supermatrix.fa",
     output:
         tree=f"{OUTDIR}/buscoPhylo/species_tree.nwk",
+    log:
+        f"{OUTDIR}/buscoPhylo/fasttree.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 8))
     resources:
         mem_mb=lambda wildcards, attempt: 16000 * attempt,
@@ -279,7 +296,7 @@ rule run_fasttree:
     shell:
         """
         export OMP_NUM_THREADS={threads}
-        FastTree -lg -gamma {input.supermatrix} > {output.tree} 2>>{output.tree}.log
+        FastTree -lg -gamma {input.supermatrix} > {output.tree} 2>> {log}
         """
 
 
@@ -293,6 +310,8 @@ rule busco_completeness_phylo:
         tree=f"{OUTDIR}/buscoPhylo/species_tree.nwk",
     output:
         pdf=f"{OUTDIR}/buscoPhylo/busco_completeness_phylo.pdf",
+    log:
+        f"{OUTDIR}/buscoPhylo/busco_completeness_phylo.log"
     threads: 1
     resources:
         mem_mb=2000,
@@ -320,6 +339,8 @@ rule busco_te_qc:
     output:
         pdf=f"{OUTDIR}/buscoPhylo/busco_te_qc.pdf",
         tsv=f"{OUTDIR}/buscoPhylo/busco_te_qc.tsv",
+    log:
+        f"{OUTDIR}/buscoPhylo/busco_te_qc.log"
     threads: 1
     resources:
         mem_mb=4000,

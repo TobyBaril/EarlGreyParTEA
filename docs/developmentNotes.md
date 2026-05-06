@@ -2069,4 +2069,187 @@ earlGreyParTEA \
   --slurm
 ```
 
-The many genomes test passed with no errors, and all expected outputs were produced. The shared/unique plots show the 10 species in the same order as the tree, and the BUSCO vs TE QC plot shows points coloured by dominant TE class. This confirms that all new features work together as expected on a larger dataset.
+The many genomes test passed with no errors, and all expected outputs were produced. The shared/unique plots show the 10 species in the same order as the tree, and the BUSCO vs TE QC plot shows points coloured by dominant TE class. This confirms the pipeline is working correctly for v0.1.6.
+
+---
+
+## Release v0.1.7 Feature Updates
+
+### Removal of `-norna` flag from all RepeatMasker calls
+
+**Problem:** All RepeatMasker invocations in the pipeline carried the `-norna` flag, which suppresses masking of small RNA genes and related repeats (snRNA, scRNA, tRNA etc.). This was undesirable for a general-purpose TE annotation pipeline — RNA-derived repeats such as SINEs are legitimate TE families and excluding them from masking introduces a systematic gap in the annotation.
+
+**Fix:** Removed `-norna` from every RepeatMasker call in the pipeline:
+
+- `rules/lib_construct.smk` — removed from `repeatmasker` (species-database initial masking) and `repeatmasker_custom` (custom-library initial masking)
+- `rules/annotate.smk` — removed from `repeatmasker_annotation` (final annotation masking against the curated TE library)
+
+The warmup dummy run (`repeatmasker_warmup`) is not affected because it uses `-lib` with a short random sequence that will never match any annotated repeats regardless of `-norna`.
+
+**Files changed:**
+- `rules/lib_construct.smk`
+- `rules/annotate.smk`
+
+---
+
+### Extended `repeatmasker_warmup` to pre-build species-specific library cache
+
+**Background:** The v0.1.3 `repeatmasker_warmup` rule only pre-built the general RepeatMasker BLAST cache. When a taxon-specific library is requested (e.g. `repeatmasker_species: "7215"` for Drosophila), RepeatMasker must also build a species-specific BLAST database cache at `Libraries/CONS-Dfam_withRBRM_3.9/<species>/` the first time it runs. This cache build writes several files:
+
+- `refineableHash.dat` — a Perl `Storable` hash mapping each TE family to its refinability status
+- `speciesMeta.pm` — Perl module with metadata about the species library
+- `specieslib` + BLAST DB files (`specieslib.nhr`, `.nin`, `.nsq`, etc.) — the BLAST-indexed library
+
+If multiple genome jobs start simultaneously before this cache exists, each job tries to build it in parallel. All jobs create their own `<species>.working/` staging directory, but only one can win the final rename; all others fail immediately.
+
+**Additional complication — incomplete cache from a previous OOM kill:** If a previous run was killed mid-build (e.g. by a SLURM cgroup OOM signal during `makeblastdb`), the `<species>/` directory may be left in a partially-built state containing the BLAST `.nhr`/`.nin`/`.nsq` files but lacking `refineableHash.dat` and `speciesMeta.pm`. RepeatMasker's cache-validation logic checks for `*.nhr` first; if found, it treats the cache as valid and tries to immediately retrieve `refineableHash.dat` with Perl `Storable::retrieve()`. This fails with a crash rather than triggering a rebuild, causing every parallel genome job to fail.
+
+**Root cause of observed failures (April 2026 drosophila run):**
+1. **April 24** — OOM kill during `makeblastdb` building the Drosophila species library (2,541 sequences). Left `7215/` with BLAST DB files only; no `refineableHash.dat`.
+2. **April 30 re-run** — `7215/` had `.nhr` files → RepeatMasker's cache check passed → immediate crash on `retrieve("refineableHash.dat")` for all parallel jobs.
+
+**Fix:** The `repeatmasker_warmup` rule now also pre-builds the species-specific cache before any parallel genome jobs start. The new logic:
+
+1. Checks whether the species cache directory exists but is missing `refineableHash.dat` (incomplete from a previous aborted run). If so, **deletes the directory** to force a fresh build. RepeatMasker will not do this itself because it considers `.nhr` a sufficient validity indicator.
+2. Removes any stale `<species>.working/` directory from a previous aborted parallel build.
+3. Runs a single dummy RepeatMasker job (`-species <spec>` on a one-sequence FASTA) to trigger the full cache build — including `refineableHash.dat`, `speciesMeta.pm`, and the BLAST DB.
+4. **Verifies** that `refineableHash.dat` now exists. If not, the warmup rule exits with a non-zero status and a clear error message, preventing the pipeline from proceeding with a broken cache.
+
+The warmup `mem_mb` was increased from 4,000 to 32,000 MB and `runtime` from 30 to 120 minutes to accommodate the large species library build (the Drosophila `7215` library is ~2,500 sequences and requires a correspondingly large `makeblastdb` run).
+
+**Files changed:**
+- `rules/lib_construct.smk` — extended `repeatmasker_warmup` shell block; added `params: rep_spec=REPSPEC`; increased `mem_mb` and `runtime` resources
+
+---
+
+### RepeatModeler robustness for small genomes (`-genomeSampleSizeMax`)
+
+**Problem:** RepeatModeler runs up to 6 rounds of repeat discovery. Round 1 uses RepeatScout and samples up to 40 Mbp; rounds 2–6 use RECON with progressively larger samples:
+
+| Round | Tool | Sample size |
+|-------|------|-------------|
+| 1 | RepeatScout | 40 Mbp |
+| 2 | RECON | 3 Mbp |
+| 3 | RECON | 9 Mbp |
+| 4 | RECON | 27 Mbp |
+| 5 | RECON | 81 Mbp |
+| 6 | RECON | 243 Mbp |
+
+For genomes smaller than the round 6 default, RepeatModeler may attempt a round for which there is insufficient unmasked sequence (because earlier rounds have already masked much of the genome). When this happens it fails to write the round's `sampleDB-N.fa` file and crashes with:
+
+```
+FastaDB::compact - Error could not locate file .../round-N/sampleDB-N.fa!
+ at .../RepeatModeler line 943.
+```
+
+This is a RepeatModeler bug — it should exit gracefully — but the pipeline must handle it.
+
+**Complication — contigs < 40 kb are discarded:** RepeatModeler discards any contig shorter than 40 kb during sampling. Using the total genome size from the BLAST database (`blastdbcmd -info`) overestimates the sequence actually available. The correct value is the sum of all contig lengths ≥ 40 kb.
+
+**Fix:** The `repeatmodeler` rule now:
+
+1. Computes the **sampable genome size** — sum of contig lengths ≥ 40 kb — from the `.prep` FASTA using an awk one-liner (the `.prep` file is already an explicit rule input):
+
+```bash
+GENOME_SIZE=$(awk '/^>/{if(len>=40000)sum+=len; len=0; next}{len+=length($0)} \
+    END{if(len>=40000)sum+=len; print sum+0}' {input.prep})
+```
+
+2. Selects the highest RECON round the genome can support by comparing the sampable size against **cumulative** sample totals across rounds (since a genome must have enough sequence for all rounds up to and including the cap, not just the final one):
+
+| Sampable size | `-genomeSampleSizeMax` | Rounds run |
+|---|---|---|
+| ≥ 363 Mbp (3+9+27+81+243) | none (default) | 1–6 |
+| ≥ 120 Mbp (3+9+27+81) | `81000000` | 1–5 |
+| ≥ 39 Mbp (3+9+27) | `27000000` | 1–4 |
+| ≥ 12 Mbp (3+9) | `9000000` | 1–3 |
+| < 12 Mbp | `3000000` | 1–2 |
+
+The `-genomeSampleSizeMax` value itself is set to the per-round size for the final allowed round (not the cumulative total), matching RepeatModeler's internal semantics for the flag.
+
+**Example (Neuro73, ~38.7 Mbp sampable):** `39M > 38.7M`, so the cap is `27000000` → rounds 1–4 only. Without the fix RepeatModeler ran all 4 RECON rounds successfully then attempted round 5, could not build `sampleDB-4.fa` from the exhausted masked genome, and crashed.
+
+**Files changed:**
+- `rules/lib_construct.smk` — added `.prep` as an explicit input to `repeatmodeler`; awk sampable-size calculation; round-capping logic with cumulative thresholds
+
+---
+
+### Per-rule log files (all rules)
+
+**Motivation:** Previously only a small number of rules had `log:` directives. All tool output (RepeatMasker, RepeatModeler, HELIANO, etc.) was printed to stdout/stderr and mixed with Snakemake's own progress messages. On long runs this made it hard to locate warnings or diagnose failures without scrolling through thousands of lines.
+
+**Changes:** A `log:` directive was added to every rule across all six rule files:
+
+| File | Rules modified |
+|------|---------------|
+| `rules/lib_construct.smk` | `repeatmasker_warmup`, `prep_genome`, `repeatmasker`, `repeatmasker_custom`, `extract_repeatmasker_library`, `build_db`, `repeatmodeler`, `testrainer` |
+| `rules/annotate.smk` | `repeatmasker_annotation`, `heliano_detection`, `merge_repeats`, `generate_summary_charts`, `calculate_divergence`, `sweep_up_files`, `generate_softmasked_genome` |
+| `rules/busco_phylo.smk` | `fetch_busco_db`, `run_busco`, `busco_summary_table`, `extract_busco_aa`, `align_busco_gene`, `create_supermatrix`, `run_fasttree`, `busco_completeness_phylo`, `busco_te_qc` |
+| `rules/saturation.smk` | `saturation_plot` |
+| `rules/clustering.smk` | `cluster_all_species` |
+| `rules/shared_unique_content.smk` | `shared_unique_plot`, `shared_unique_plot_phylo`, `shared_unique_pa_plot`, `shared_unique_pa_plot_phylo` |
+
+**Log file placement:** Log files sit alongside their output directories, using the same wildcard structure as the rule's `output:` block. Example paths:
+
+- `{outdir}/{species}_EarlGrey/{species}_RepeatModeler/{species}.repeatmodeler.log`
+- `{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.repeatmasker.log`
+- `{outdir}/{species}_EarlGrey/{species}_heliano/{species}.heliano_detection.log`
+- `{OUTDIR}/combinedLibraries/cluster_all_species.log`
+- `{OUTDIR}/buscoPhylo/fasttree.log`
+
+**Shell output redirection strategy:**
+
+- `shell:` rules: `exec > {log} 2>&1` as the first line redirects all subsequent stdout and stderr (including subprocesses) to the log file.
+- `script:` rules: Snakemake automatically redirects stderr to the `log:` file; no extra line is needed.
+- `run:` rules: each `shell()` call appends `>> str(log) + " 2>&1"`.
+- **Special case — `run_fasttree`:** FastTree writes the newick tree to stdout and diagnostics to stderr, so `FastTree ... > {output.tree} 2>> {log}` is used instead of `exec > {log} 2>&1`.
+
+**Effect:** After this change only Snakemake's job submission/completion messages and explicit `print()` calls in `on_start_functions.py` appear on the terminal. All tool output is captured in per-rule log files.
+
+**Files changed:**
+- `rules/lib_construct.smk`, `rules/annotate.smk`, `rules/busco_phylo.smk`, `rules/saturation.smk`, `rules/clustering.smk`, `rules/shared_unique_content.smk` — `log:` directives and redirection added to all rules
+
+---
+
+### Bug fix: wildcard mismatch in `clustering.smk`
+
+**Error observed when the log directive was first added:**
+
+```
+WorkflowError: Not all output, log and benchmark files of rule cluster_all_species
+contain the same wildcards. This is a Snakemake requirement.
+```
+
+**Root cause:** The `log:` directive was initially written as a Python f-string:
+
+```python
+log: f"{OUTDIR}/combinedLibraries/cluster_all_species.log"
+```
+
+Because f-strings are evaluated at Python parse time, this produces a literal string that Snakemake's wildcard system cannot see. The rule's `output:` uses the `{outdir}` Snakemake wildcard, so Snakemake's validator correctly rejects the mismatch.
+
+**Fix:** Changed to a plain wildcard string:
+
+```python
+log: "{outdir}/combinedLibraries/cluster_all_species.log"
+```
+
+**General principle:** `log:` must use the same wildcard form as `output:`. If `output:` uses Snakemake wildcards (`{outdir}`, `{species}`, etc.), so must `log:`. Python f-strings in rule fields are only appropriate when `output:` is also an f-string (path fully determined at parse time from global variables like `OUTDIR`).
+
+**Files changed:**
+- `rules/clustering.smk` — `log:` changed from f-string to Snakemake wildcard string
+
+---
+
+### Verification checklist for v0.1.7
+
+- [ ] Run pipeline with `repeatmasker_species` set on a species with a large library (e.g. Drosophila `7215`). Confirm warmup builds a complete `7215/` cache including `refineableHash.dat` before any parallel genome jobs start.
+- [ ] Manually corrupt the `7215/` cache (delete `refineableHash.dat`, leave `.nhr` files). Re-run. Confirm warmup detects the incomplete cache, removes the directory, and rebuilds it cleanly.
+- [ ] Run pipeline with a genome < 81 Mbp. Confirm RepeatModeler receives `-genomeSampleSizeMax <size>` in the job log.
+- [ ] Run pipeline with a genome > 81 Mbp. Confirm RepeatModeler receives no extra flag.
+- [ ] Confirm no RNA-family annotations appear as masked in RepeatMasker output that would previously have been suppressed by `-norna` (e.g. check for `RNA` or `srpRNA` class entries in `.out` files).
+- [ ] After a completed run, confirm per-rule log files exist alongside each output directory (e.g. `{species}.repeatmodeler.log`, `{species}.repeatmasker.log`, `{species}.heliano_detection.log`).
+- [ ] Confirm terminal output during a run shows only Snakemake progress lines and startup messages — no RepeatMasker/RepeatModeler/HELIANO stdout.
+- [ ] Confirm `{OUTDIR}/combinedLibraries/cluster_all_species.log` is created on a multi-genome run (validates the wildcard-string fix).
+- [ ] Local mode regression: confirm all changes do not break a standard local run on a previously working dataset.
+
