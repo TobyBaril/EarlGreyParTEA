@@ -2167,7 +2167,7 @@ GENOME_SIZE=$(awk '/^>/{if(len>=40000)sum+=len; len=0; next}{len+=length($0)} \
 
 The `-genomeSampleSizeMax` value itself is set to the per-round size for the final allowed round (not the cumulative total), matching RepeatModeler's internal semantics for the flag.
 
-**Example (Neuro73, ~38.7 Mbp sampable):** `39M > 38.7M`, so the cap is `27000000` → rounds 1–4 only. Without the fix RepeatModeler ran all 4 RECON rounds successfully then attempted round 5, could not build `sampleDB-4.fa` from the exhausted masked genome, and crashed.
+**Example (Neuro73, ~38.7 Mbp sampable):** `39M > 38.7M`, so the cap is `9000000` → rounds 1–4 only. Without the fix RepeatModeler ran all 4 RECON rounds successfully then attempted round 5, could not build `sampleDB-4.fa` from the exhausted masked genome, and crashed.
 
 **Files changed:**
 - `rules/lib_construct.smk` — added `.prep` as an explicit input to `repeatmodeler`; awk sampable-size calculation; round-capping logic with cumulative thresholds
