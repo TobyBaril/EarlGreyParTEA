@@ -2253,3 +2253,27 @@ log: "{outdir}/combinedLibraries/cluster_all_species.log"
 - [ ] Confirm `{OUTDIR}/combinedLibraries/cluster_all_species.log` is created on a multi-genome run (validates the wildcard-string fix).
 - [ ] Local mode regression: confirm all changes do not break a standard local run on a previously working dataset.
 
+## Release v0.1.8 Feature Updates
+
+### Dynamic discovery of RepeatMasker species-library cache directory
+
+**Problem:** The `repeatmasker_warmup` rule hardcoded the species-library BLAST cache parent directory as `$RM_SHARE/Libraries/CONS-Dfam_withRBRM_3.9`. This path is only present when the RepeatMasker installation includes both Dfam **and** RepBase RepeatMasker edition (RBRMSK). Users who configured RepeatMasker with Dfam only (or a future Dfam version with a different suffix) have a differently-named directory (e.g. `CONS-Dfam_3.9`). In those environments the warmup checked and rebuilt the cache in the wrong location — the real cache directory was never validated before the parallel genome jobs started.
+
+**Fix:** The hardcoded `CACHE_PARENT` assignment is replaced by a `find` call that discovers the actual `CONS-*` directory at runtime:
+
+```bash
+CACHE_PARENT=$(find "$RM_SHARE/Libraries" -maxdepth 1 -type d -name "CONS-*" 2>/dev/null | head -n 1)
+```
+
+This executes after the general-library warmup (which ensures the `Libraries/` directory is fully populated), so the `CONS-*` directory will exist by the time `find` runs if any species library is present. If no matching directory is found the warmup prints a clear warning and exits gracefully (exit 0) rather than attempting to validate a cache inside a non-existent parent.
+
+**Files changed:**
+- `rules/lib_construct.smk` — hardcoded `CACHE_PARENT` path replaced with dynamic `find` discovery; added graceful exit with warning if no `CONS-*` directory is found
+
+---
+
+### Verification checklist for v0.1.8
+
+- [ ] Run pipeline with `repeatmasker_species` set on an installation configured with Dfam **only** (no RepBase). Confirm warmup locates the `CONS-Dfam_*` directory and validates/builds the species cache correctly.
+- [ ] Run pipeline on a standard installation with both Dfam and RepBase. Confirm existing behaviour is unchanged.
+- [ ] Confirm that if the `Libraries/` directory contains no `CONS-*` subdirectory the warmup prints the expected warning and the pipeline does not proceed with species-cache validation.

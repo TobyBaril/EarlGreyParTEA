@@ -66,73 +66,43 @@ ParTEA extends EarlGrey with features designed for multi-genome comparative TE a
 - 🌳 **BUSCO Phylogenomics** *(new in v0.1.6)* — Optional module (`run_busco_phylo: true`) that runs BUSCO, aligns and trims single-copy orthologues, concatenates a supermatrix, and infers a species tree with FastTree. Outputs a phylo-ordered BUSCO completeness chart with cladogram sidebar and a TE content vs BUSCO QC scatter plot.
 - 📋 **Per-rule log files** *(new in v0.1.7)* — Every rule now writes its tool output to a dedicated log file placed alongside its output directory. Only Snakemake progress messages are printed to the terminal during a run; all RepeatMasker, RepeatModeler, HELIANO, and other tool output is captured in per-rule logs for easier post-hoc debugging.
 - 🛡️ **RepeatModeler small-genome robustness** *(improved in v0.1.7)* — The pipeline now computes the samplable genome size (contigs ≥ 40 kb only) and automatically sets `-genomeSampleSizeMax` to prevent RepeatModeler from attempting a round for which insufficient unmasked sequence remains. See [Troubleshooting](#troubleshooting) for details.
+- 🔧 **RepeatMasker cache-directory compatibility** *(improved in v0.1.8)* — The species-library warmup now discovers the `CONS-*` cache directory dynamically rather than hardcoding `CONS-Dfam_withRBRM_3.9`. This fixes a failure on installations configured with Dfam only (no RepBase), where the directory has a different name.
 
 ---
 
-## 🆕 Changes in Latest Release (v0.1.7)
+## 🆕 Changes in Latest Release (v0.1.8)
+
+### Dynamic discovery of RepeatMasker species-library cache directory
+
+The `repeatmasker_warmup` rule previously hardcoded the species-library BLAST cache parent as `CONS-Dfam_withRBRM_3.9`. This path only exists on installations that include both Dfam and RepBase RepeatMasker edition. On Dfam-only installations the directory has a different name (e.g. `CONS-Dfam_3.9`), causing the warmup to check the wrong location and fail to validate the cache before parallel genome jobs started.
+
+The path is now discovered dynamically:
+
+```bash
+CACHE_PARENT=$(find "$RM_SHARE/Libraries" -maxdepth 1 -type d -name "CONS-*" 2>/dev/null | head -n 1)
+```
+
+If no `CONS-*` directory is found, the warmup prints a clear warning and exits gracefully rather than crashing.
+
+---
+
+## Previous Release (v0.1.7)
 
 ### Per-rule log files
 
 All rules across all six rule files now write their tool output to a dedicated log file placed alongside the relevant output directory (e.g. `{species}.repeatmodeler.log` next to `{species}_RepeatModeler/`). Only Snakemake's own job progress messages are printed to the terminal during a run.
 
-This makes it much easier to locate warnings or diagnose failures after a run without scrolling through thousands of lines of mixed terminal output.
-
 ### RepeatModeler small-genome robustness
 
-RepeatModeler can crash on small or fragmented genomes when a later round tries to sample more sequence than is available. The pipeline now prevents this by:
-
-1. Computing the **samplable genome size** — the sum of all contig lengths ≥ 40 kb (RepeatModeler discards shorter contigs during sampling, so the total genome size overestimates what is available).
-2. Setting `-genomeSampleSizeMax` to the per-round sample size for the highest RECON round the genome can support, based on cumulative sample totals across rounds:
-
-| Samplable size | `-genomeSampleSizeMax` | Rounds run |
-|---|---|---|
-| ≥ 363 Mbp | none (default) | 1–6 |
-| ≥ 120 Mbp | `81000000` | 1–5 |
-| ≥ 39 Mbp | `27000000` | 1–4 |
-| ≥ 12 Mbp | `9000000` | 1–3 |
-| < 12 Mbp | `3000000` | 1–2 |
+RepeatModeler can crash on small or fragmented genomes when a later round tries to sample more sequence than is available. The pipeline now prevents this by computing the **samplable genome size** (contigs ≥ 40 kb only) and setting `-genomeSampleSizeMax` to the appropriate per-round cap.
 
 ### Extended `repeatmasker_warmup` — species-specific cache
 
-When `repeatmasker_species` is set, RepeatMasker must build a species-specific BLAST database cache before any genome jobs start. Previously this cache was built by the first parallel genome job; if multiple jobs started simultaneously each would attempt to build it and all but one would fail. The warmup rule now pre-builds this cache serially before any per-genome jobs are dispatched.
-
-The warmup also detects and repairs incomplete caches left by a previous OOM-killed run (which can cause all subsequent jobs to crash even though the BLAST database files appear to exist).
+When `repeatmasker_species` is set, the warmup rule now pre-builds the species-specific BLAST database cache serially before any per-genome jobs are dispatched, preventing a race condition when multiple genome jobs start simultaneously. It also detects and repairs incomplete caches left by a previous OOM-killed run.
 
 ### Removal of `-norna` flag
 
-The `-norna` flag was removed from all RepeatMasker calls. This flag suppressed masking of RNA-derived repeats (snRNA, scRNA, tRNA, SINEs); removing it ensures these legitimate TE families are included in the annotation.
-
----
-
-## Previous Release (v0.1.6)
-
-### New optional modules
-
-Two new analysis modules were added (both disabled by default):
-
-| Module | Config key | Description |
-|--------|-----------|-------------|
-| Shared/Unique TE Content | `run_shared_unique: true` | Stacked bar charts showing the proportion of TE families (or genome coverage) that are shared across all genomes, shared among subsets, or unique to each genome. Optionally reordered by phylogeny. |
-| BUSCO Phylogenomics | `run_busco_phylo: true` | Runs BUSCO, builds a single-copy orthologue supermatrix, infers a species tree with FastTree, and produces a completeness bar chart ordered along the tree. A TE content vs BUSCO completeness QC scatter plot is also generated. |
-
-See [Optional Analysis Modules](#-optional-analysis-modules) for full documentation.
-
-### Extended config generation
-
-Three new flags make it easier to create config files without manual editing:
-
-| Flag | Description |
-|------|-------------|
-| `--genome-dir DIR` | Scan a directory for FASTA files and auto-populate `genome:` / `species:` blocks |
-| `--from-csv FILE` | Read a CSV with `species` and `genome_path` columns to populate the config |
-| `--output-dir DIR` | Set `output_dir` in the generated config (usable with either flag above) |
-
-The CSV format requires two columns (`species`, `genome_path`); `output_dir` is
-always supplied on the command line, not inside the CSV.
-
-All three pipeline entry points (`earlGreyParTEA`, `earlGreyParTEA_LibConstruct`,
-`earlGreyParTEA_AnnotationOnly`) support the new flags. The blank-template
-behaviour of `--generate-config` is unchanged.
+The `-norna` flag was removed from all RepeatMasker calls, ensuring RNA-derived repeats (snRNA, scRNA, tRNA, SINEs) are included in the annotation.
 
 ---
 
@@ -141,7 +111,7 @@ behaviour of `--generate-config` is unchanged.
 - [What is ParTEA?](#what-is-partea)
 - [Citation](#-citation)
 - [ParTEA Features](#-partea-features)
-- [Changes in Latest Release](#-changes-in-latest-release-v017)
+- [Changes in Latest Release](#-changes-in-latest-release-v018)
 - [Pipeline Overview](#-pipeline-overview)
 - [Installation](#-installation)
   - [Via conda/mamba](#via-condamamba-recommended---party-in-a-package)
