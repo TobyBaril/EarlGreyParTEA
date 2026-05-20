@@ -59,7 +59,13 @@ rule repeatmasker_warmup:
         # simultaneously, causing all but one to fail.
         if [ -n "{params.rep_spec}" ]; then
             SPECIES_WORD=$(echo "{params.rep_spec}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_')
-            CACHE_PARENT="$RM_SHARE/Libraries/CONS-Dfam_withRBRM_3.9"
+            # Dynamically discover the CONS cache parent — its name varies depending on
+            # whether RepBase is included (e.g. CONS-Dfam_withRBRM_3.9 vs CONS-Dfam_3.9).
+            CACHE_PARENT=$(find "$RM_SHARE/Libraries" -maxdepth 1 -type d -name "CONS-*" 2>/dev/null | head -n 1)
+            if [ -z "$CACHE_PARENT" ]; then
+                echo "WARNING: No CONS-* cache directory found under $RM_SHARE/Libraries — skipping species cache check." >&2
+                exit 0
+            fi
             CACHE_DIR="$CACHE_PARENT/$SPECIES_WORD"
 
             # If the cache directory exists but refineableHash.dat is missing, it is
