@@ -169,7 +169,12 @@ def validate_parameters(config, outfile = None):
         'skip_clustering': (False, None),
         'clustering_identity': (0.8, None),
         'clustering_coverage': (0.8, None),
+        'clustering_coverage_long': (0.0, None),
         'clustering_length_diff': (0.5, None),
+        'split_chimeras': (False, None),
+        'chimera_overlap_min': (50, None),
+        'chimera_min_members': (3, None),
+        'chimera_min_component_span': (0.1, None),
         'softmask': (False, None),
         'margin': (False, None),
         'flank': (1000, "Blast, extend, align, trim process will add {}bp to each end in each iteration"),
@@ -221,9 +226,21 @@ def validate_parameters(config, outfile = None):
     else:
         cluster_id = config.get('clustering_identity', 0.8)
         cluster_cov = config.get('clustering_coverage', 0.8)
+        cluster_cov_long = config.get('clustering_coverage_long', 0.0)
         cluster_len = config.get('clustering_length_diff', 0.5)
-        msg_info(f"TE consensus sequences will be clustered (identity: {cluster_id}, coverage: {cluster_cov}, length_diff: {cluster_len})")
+        aL_note = f", aL: {cluster_cov_long}" if cluster_cov_long > 0.0 else " (aL: disabled)"
+        msg_info(f"TE consensus sequences will be clustered (identity: {cluster_id}, aS: {cluster_cov}, length_diff: {cluster_len}{aL_note})")
+        if cluster_cov_long > 0.0:
+            msg_info(f"Long-sequence coverage filter active: sequences must contribute >= {cluster_cov_long:.0%} of the longer sequence to the alignment")
         msg_warn("Clustering may affect subfamilies and create chimeras")
+        # Chimera splitting
+        if config.get('split_chimeras', False):
+            ovlp = config.get('chimera_overlap_min', 50)
+            min_mem = config.get('chimera_min_members', 3)
+            span = config.get('chimera_min_component_span', 0.1)
+            msg_info(f"Chimera detection enabled (overlap_min: {ovlp} nt, min_members: {min_mem}, min_component_span: {span})")
+        else:
+            msg_info("Chimera detection disabled (split_chimeras: false)")
 
     # Saturation plot
     pipeline_mode_for_sat = config.get('pipeline_mode', 'full')

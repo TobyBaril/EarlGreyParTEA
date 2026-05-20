@@ -97,6 +97,16 @@ if PIPELINE_MODE == "libconstruct":
             f"{OUTDIR}/combinedLibraries/combined_all_species.clstrd.fa",
             f"{OUTDIR}/combinedLibraries/saturation_plot.pdf",
             f"{OUTDIR}/combinedLibraries/saturation_data.tsv",
+            # Optional: chimera detection outputs
+            *(
+                [
+                    f"{OUTDIR}/combinedLibraries/combined_all_species.chimera_split.fa",
+                    f"{OUTDIR}/combinedLibraries/chimera_detection_summary.tsv",
+                ]
+                if config.get('split_chimeras', False)
+                   and not config.get('skip_clustering', False)
+                else []
+            ),
             # shared/unique not applicable for libconstruct (no annotation)
 
 elif PIPELINE_MODE == "annotate":
@@ -200,6 +210,16 @@ else:  # "full" mode (default)
             ) if SOFTMASK is True or SOFTMASK == 'yes' else [],
             f"{OUTDIR}/combinedLibraries/saturation_plot.pdf",
             f"{OUTDIR}/combinedLibraries/saturation_data.tsv",
+            # Optional: chimera detection outputs
+            *(
+                [
+                    f"{OUTDIR}/combinedLibraries/combined_all_species.chimera_split.fa",
+                    f"{OUTDIR}/combinedLibraries/chimera_detection_summary.tsv",
+                ]
+                if config.get('split_chimeras', False)
+                   and not config.get('skip_clustering', False)
+                else []
+            ),
             # Optional: cluster-based shared/unique
             *(
                 [

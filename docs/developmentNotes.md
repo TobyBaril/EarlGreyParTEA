@@ -2272,6 +2272,34 @@ Set to `0.0` to restore the previous behaviour (no length restriction).
 
 ---
 
+### CD-HIT long-sequence coverage filter (`clustering_coverage_long` / `-aL`)
+
+**Problem:** `cd-hit-est` was run with `-G 0 -aS 0.8` (80% of the *shorter* sequence must align). This allowed a short sequence (e.g. 1 092 nt) to be absorbed into a cluster whose representative was an order of magnitude longer (e.g. 20 383 nt), provided ~874 nt aligned somewhere in the longer sequence. Inspection of the resulting `.clstr` files revealed that some very long representatives appear to be chimeric or over-extended consensus sequences — they contain sub-regions with similarity to multiple distinct short elements, causing those short elements to be incorrectly merged into a single cluster.
+
+**Analysis:** Examining alignment coordinates in the `.clstr` format reveals the mechanism. In a chimeric representative of 20 383 nt, different members align to completely non-overlapping windows (e.g. positions 1–13 278 and 16 170–17 256), confirming the representative spans at least two distinct elements. The `-aS` parameter cannot guard against this because a short sequence's coverage of itself is always high regardless of what fraction of the long representative it covers.
+
+**Fix:** The `-aL` flag requires the alignment to cover at least a given fraction of the *longer* sequence. Because the alignment cannot be longer than the shorter sequence, this imposes an implicit length-ratio constraint:
+
+$$\text{alignment} \geq \text{aL} \times \text{longer} \quad\Rightarrow\quad \frac{\text{shorter}}{\text{longer}} \geq \text{aL}$$
+
+| `clustering_coverage_long` | Max tolerated length ratio | Example effect |
+|---|---|---|
+| 0.0 (default, disabled) | no limit | previous behaviour |
+| 0.5 | ~2× | 7 779 nt cannot cluster with 20 383 nt representative |
+| 0.75 | ~1.33× | both 7 779 nt and 14 766 nt excluded from 20 383 nt cluster |
+| 0.8 | ~1.25× | strict; sequences must be nearly the same length |
+
+Recommended value: `0.75`. Default is `0.0` for backward compatibility.
+
+**Files changed:**
+- `config/config.yaml` — new `clustering_coverage_long: 0.0` parameter
+- `rules/clustering.smk` — `cluster_coverage_long` param added; `-aL {params.cluster_coverage_long}` added to `cd-hit-est` call
+- `scripts/on_start_functions.py` — default added; startup message extended to report `aL` status
+- `earlGreyParTEA`, `earlGreyParTEA_LibConstruct`, `earlGreyParTEA_AnnotationOnly` — `clustering_coverage_long: 0.0` added to generated config templates
+- `README.md` — Clustering Options docs updated
+
+---
+
 ### Dynamic discovery of RepeatMasker species-library cache directory
 
 **Problem:** The `repeatmasker_warmup` rule hardcoded the species-library BLAST cache parent directory as `$RM_SHARE/Libraries/CONS-Dfam_withRBRM_3.9`. This path is only present when the RepeatMasker installation includes both Dfam **and** RepBase RepeatMasker edition (RBRMSK). Users who configured RepeatMasker with Dfam only (or a future Dfam version with a different suffix) have a differently-named directory (e.g. `CONS-Dfam_3.9`). In those environments the warmup checked and rebuilt the cache in the wrong location — the real cache directory was never validated before the parallel genome jobs started.
@@ -2289,12 +2317,172 @@ This executes after the general-library warmup (which ensures the `Libraries/` d
 
 ---
 
+### Post-clustering chimera detection and cluster splitting (`split_chimeras`)
+
+**Background:** Even after applying `-s` (length-difference) and `-aL` (long-sequence coverage) constraints at clustering time, some chimeric cluster representatives can survive. A chimeric representative is a consensus sequence built from two or more distinct TE families joined end-to-end during EarlGrey's iterative BEAT process. When such a representative acts as a cluster hub, biologically unrelated short elements map to opposite ends of it and end up incorrectly merged into a single cluster.
+
+**Detection algorithm:**
+For each cluster with ≥ `chimera_min_members` non-representative members:
+1. Extract `(rep_start, rep_end)` alignment coordinates for each member from the `.clstr` file (available because `cd-hit-est` is run with `-d 0`).
+2. Build an overlap graph: two members share an edge if their alignment windows on the representative overlap by ≥ `chimera_overlap_min` nucleotides (default 50 nt).
+3. Find connected components via BFS. If ≥ 2 components each spanning ≥ `chimera_min_component_span` fraction of the representative's length are found, the cluster is flagged as chimeric.
+4. Assign a **chimera score** = largest inter-component gap (nt) / representative length. Higher scores indicate a clearer structural break.
+
+**Splitting:**
+For each confirmed chimeric cluster:
+- The original representative is written to the output FASTA with a `_CHIMERA` suffix appended to its base name, retaining its `#classification` tag for traceability.
+- For each component (sorted by leftmost alignment position on the representative), the **longest member** is selected as the new cluster representative. Its sequence and **full original FASTA header** are taken directly from the pre-clustering combined FASTA (`combined_all_species.fa`), so all species prefixes and classification tags are preserved exactly as they were entered into clustering.
+
+**Snakemake integration:**
+- `cluster_all_species` now declares `combined_all_species.fa` as a named `temp()` output rather than deleting it with `rm -f`. Snakemake manages its deletion automatically once all consuming rules finish.
+- The `split_chimeras` rule is only defined (and only appears in the DAG) when `split_chimeras: true` AND `skip_clustering: false`.
+- `rules/annotate.smk` resolves the annotation library at parse time: `combined_all_species.chimera_split.fa` when `split_chimeras: true`, otherwise `combined_all_species.clstrd.fa`. The original clustered FASTA is always preserved.
+- `combined_all_species.chimera_split.fa` and `chimera_detection_summary.tsv` are requested by `rule all` for `full` and `libconstruct` pipeline modes when the feature is active.
+
+**New config parameters (all backward-compatible defaults):**
+```yaml
+split_chimeras: false           # enable post-clustering chimera detection and splitting
+chimera_overlap_min: 50         # min nt overlap between member alignment windows to be
+                                 #   in the same component (lower = more sensitive)
+chimera_min_members: 3          # min non-representative members to test a cluster
+chimera_min_component_span: 0.1 # each component must span >= this fraction of rep length
+```
+
+**Output files** (written to `{output_dir}/combinedLibraries/`):
+- `combined_all_species.chimera_split.fa` — modified library used for annotation; chimeric reps relabelled `_CHIMERA`, replaced by component representatives with original headers
+- `chimera_detection_summary.tsv` — per-cluster table with columns: `cluster_idx`, `representative`, `rep_length`, `n_members`, `is_chimeric`, `n_components`, `component_sizes`, `chimera_score`, `component_rep_names`
+
+**Files changed:**
+- `scripts/split_chimeras.py` — new script; detection, overlap graph, BFS, and FASTA output; guarded with `if 'snakemake' in dir(): main()` so the module is importable for testing
+- `rules/clustering.smk` — `combined_fa=temp(...)` added to `cluster_all_species` outputs; `rm -f` lines removed; `split_chimeras` rule appended (conditionally defined)
+- `rules/annotate.smk` — `ANNOTATION_LIBRARY` variable resolves to `chimera_split.fa` or `clstrd.fa` based on config
+- `Snakefile` — chimera outputs added to `rule all` for `libconstruct` and `full` modes
+- `config/config.yaml`, `earlGreyParTEA`, `earlGreyParTEA_LibConstruct`, `earlGreyParTEA_AnnotationOnly` — four new chimera params added to config templates
+- `scripts/on_start_functions.py` — four new defaults added; startup message reports chimera detection status and params
+- `README.md` — feature bullet added; new v0.1.8 subsection; new `### Chimera Detection Options` config section
+
+---
+
 ### Verification checklist for v0.1.8
+
+> **Key:** `[x]` = verified by automated tests (`tests/test_v018_features.py`);
+> `[ ]` = still requires a real conda environment or pipeline run (see commands below).
 
 - [ ] Run pipeline with `repeatmasker_species` set on an installation configured with Dfam **only** (no RepBase). Confirm warmup locates the `CONS-Dfam_*` directory and validates/builds the species cache correctly.
 - [ ] Run pipeline on a standard installation with both Dfam and RepBase. Confirm existing behaviour is unchanged.
-- [ ] Confirm that if the `Libraries/` directory contains no `CONS-*` subdirectory the warmup prints the expected warning and the pipeline does not proceed with species-cache validation.
-- [ ] Run clustering on a multi-genome dataset and confirm that sequences with a length ratio > 2× (e.g. ~1 000 nt vs ~20 000 nt) are no longer grouped in the same cluster.
-- [ ] Confirm that setting `clustering_length_diff: 0.0` in the config restores the previous behaviour (no length restriction), and that sequences of very different sizes can still be clustered.
-- [ ] Confirm the startup summary prints `length_diff:` alongside `identity:` and `coverage:` when clustering is enabled.
-- [ ] Confirm `--generate-config` output from all three wrapper scripts includes `clustering_length_diff: 0.5`.
+- [x] Confirm that if the `Libraries/` directory contains no `CONS-*` subdirectory the warmup prints the expected warning and the pipeline does not proceed with species-cache validation. *(TestCacheDiscovery::test_no_cons_dir_exits_zero_with_warning)*
+- [ ] Run clustering on a multi-genome dataset and confirm that sequences with a length ratio > 2× (e.g. ~1 000 nt vs ~20 000 nt) are no longer grouped in the same cluster. *(run `pytest -m integration` in env)*
+- [ ] Confirm that setting `clustering_length_diff: 0.0` in the config restores the previous behaviour (no length restriction), and that sequences of very different sizes can still be clustered. *(run `pytest -m integration` in env)*
+- [x] Confirm the startup summary prints `length_diff:` alongside `identity:` and `coverage:` when clustering is enabled. *(TestStartupMessages::test_length_diff_reported_in_message)*
+- [x] Confirm `--generate-config` output from all three wrapper scripts includes `clustering_length_diff: 0.5`. *(TestGenerateConfig — full + libconstruct wrappers)*
+- [ ] Set `clustering_coverage_long: 0.75` and re-run clustering on a dataset with known chimeric clusters (e.g. arabidopsis combinedLibraries). Confirm sequences aligning to <75% of the representative's length are no longer placed in the same cluster. *(run `pytest -m integration` in env)*
+- [ ] Confirm `clustering_coverage_long: 0.0` (default) restores the original `-aL 0.0` behaviour. *(run `pytest -m integration` in env)*
+- [x] Confirm the startup message correctly reports `aL: disabled` when `clustering_coverage_long: 0.0` and reports the value when non-zero. *(TestStartupMessages::test_aL_disabled_message_when_zero + test_aL_value_reported_when_nonzero)*
+- [x] Confirm `--generate-config` output from all three wrapper scripts includes `clustering_coverage_long: 0.0`. *(TestGenerateConfig — full + libconstruct wrappers)*
+- [ ] Enable `split_chimeras: true` on a multi-genome dataset and confirm `combined_all_species.chimera_split.fa` and `chimera_detection_summary.tsv` are produced.
+- [x] Verify that chimeric representatives appear with `_CHIMERA` suffix in `chimera_split.fa` and that component representatives carry their original FASTA headers unchanged. *(TestMainIntegration::test_chimeric_rep_labelled + test_component_reps_have_original_headers)*
+- [ ] Confirm that when `split_chimeras: true`, downstream RepeatMasker annotation uses `chimera_split.fa` (check Snakemake DAG or log for the correct input path).
+- [ ] Confirm `split_chimeras: false` (default) leaves pipeline behaviour completely unchanged and `clstrd.fa` is used for annotation.
+- [ ] Confirm that `split_chimeras: true` with `skip_clustering: true` produces a clear error or is silently ignored (rule is not defined in DAG).
+- [x] Run the unit-importable test (`python3 -c "from scripts.split_chimeras import parse_clstr, detect_chimera"`) and confirm no `NameError` is raised. *(TestModuleImportability)*
+
+---
+
+### Commands for remaining manual verifications
+
+#### Items 4, 5, 8, 9 — cd-hit-est behavioural tests (run inside conda env)
+
+```bash
+# Requires cd-hit-est on PATH (automatically available in the conda env)
+pytest tests/test_v018_features.py -v -m integration
+```
+
+Expected: 4 tests pass (`test_length_diff_prevents_extreme_size_mismatch`, `test_length_diff_zero_allows_clustering`, `test_aL_prevents_short_in_long_cluster`, `test_aL_zero_does_not_restrict`).
+
+---
+
+#### Items 1, 2 — RepeatMasker warmup with a real species library
+
+Items 1 and 2 require a full pipeline run on a machine with RepeatMasker and a real Dfam/RepBase species library installed. Add `repeatmasker_species` to config and run:
+
+```bash
+# Add to config.yaml:
+#   repeatmasker_species: "7215"   # or appropriate taxon ID
+
+earlGreyParTEA -c <your_config.yaml> --threads <N>
+
+# After the warmup step completes, confirm the cache was built:
+RM_SHARE=$(which RepeatMasker | sed 's|/bin/RepeatMasker$|/share/RepeatMasker|')
+find "$RM_SHARE/Libraries" -maxdepth 1 -type d -name "CONS-*"
+# should print the discovered directory (CONS-Dfam_3.9 or CONS-Dfam_withRBRM_3.9)
+
+find "$RM_SHARE/Libraries/CONS-*/7215" -name "refineableHash.dat"
+# should exist after a successful warmup
+```
+
+For item 2 (standard installation, unchanged behaviour) simply run the same config and confirm the pipeline completes.normally.
+
+---
+
+#### Item 12 — Full `split_chimeras` pipeline run
+
+```bash
+# Add to config.yaml:
+#   split_chimeras: true
+#   chimera_overlap_min: 50
+#   chimera_min_members: 3
+#   chimera_min_component_span: 0.1
+
+earlGreyParTEA -c <your_config.yaml> --threads <N>
+
+# Check both output files were created:
+ls <output_dir>/combinedLibraries/combined_all_species.chimera_split.fa
+ls <output_dir>/combinedLibraries/chimera_detection_summary.tsv
+
+# Quick sanity check — count chimeric entries:
+grep -c "_CHIMERA" <output_dir>/combinedLibraries/combined_all_species.chimera_split.fa
+```
+
+---
+
+#### Item 14 — Confirm annotation uses `chimera_split.fa` when `split_chimeras: true`
+
+```bash
+# Dry-run with split_chimeras: true — inspect the planned annotation job input:
+earlGreyParTEA -c <your_config_split_chimeras_true.yaml> --dry-run 2>&1 \
+  | grep -A5 "repeatmasker_annotation"
+# → input line should reference combined_all_species.chimera_split.fa
+
+# Or after a real run, check the annotation log:
+grep "chimera_split\|clstrd" <output_dir>/<species>_EarlGrey/<species>_RepeatMasker/<species>.repeatmasker_annotation.log | head -5
+```
+
+---
+
+#### Item 15 — Confirm `split_chimeras: false` leaves pipeline unchanged (`clstrd.fa` used)
+
+```bash
+# Dry-run with split_chimeras: false (the default):
+earlGreyParTEA -c <your_config_default.yaml> --dry-run 2>&1 \
+  | grep -A5 "repeatmasker_annotation"
+# → input line should reference combined_all_species.clstrd.fa
+
+# Confirm split_chimeras rule does NOT appear in the DAG:
+earlGreyParTEA -c <your_config_default.yaml> --dry-run 2>&1 \
+  | grep "split_chimeras"
+# → no output expected
+```
+
+---
+
+#### Item 16 — Confirm `split_chimeras: true` + `skip_clustering: true` → rule absent from DAG
+
+```bash
+# Add to your config.yaml:
+#   split_chimeras: true
+#   skip_clustering: true
+
+earlGreyParTEA -c <your_config_skip_clust.yaml> --dry-run 2>&1 \
+  | grep "split_chimeras"
+# → no output expected (rule is conditionally defined only when skip_clustering: false)
+```
