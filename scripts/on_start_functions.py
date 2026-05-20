@@ -169,6 +169,7 @@ def validate_parameters(config, outfile = None):
         'skip_clustering': (False, None),
         'clustering_identity': (0.8, None),
         'clustering_coverage': (0.8, None),
+        'clustering_length_diff': (0.5, None),
         'softmask': (False, None),
         'margin': (False, None),
         'flank': (1000, "Blast, extend, align, trim process will add {}bp to each end in each iteration"),
@@ -220,7 +221,8 @@ def validate_parameters(config, outfile = None):
     else:
         cluster_id = config.get('clustering_identity', 0.8)
         cluster_cov = config.get('clustering_coverage', 0.8)
-        msg_info(f"TE consensus sequences will be clustered (identity: {cluster_id}, coverage: {cluster_cov})")
+        cluster_len = config.get('clustering_length_diff', 0.5)
+        msg_info(f"TE consensus sequences will be clustered (identity: {cluster_id}, coverage: {cluster_cov}, length_diff: {cluster_len})")
         msg_warn("Clustering may affect subfamilies and create chimeras")
 
     # Saturation plot

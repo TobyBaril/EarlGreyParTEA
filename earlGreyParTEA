@@ -110,6 +110,7 @@ min_consensus_seqs: 3   # Min sequences required for consensus
 skip_clustering: false          # Set to true to skip clustering (just concatenate)
 clustering_identity: 0.8        # cd-hit sequence identity threshold (0.0-1.0)
 clustering_coverage: 0.8        # cd-hit alignment coverage (0.0-1.0)
+clustering_length_diff: 0.5     # cd-hit -s: shorter seq must be >= this fraction of longer (0.0 = no limit)
 
 # Output options
 softmask: false         # Generate softmasked genome for each input

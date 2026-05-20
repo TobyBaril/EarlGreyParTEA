@@ -67,10 +67,23 @@ ParTEA extends EarlGrey with features designed for multi-genome comparative TE a
 - 📋 **Per-rule log files** *(new in v0.1.7)* — Every rule now writes its tool output to a dedicated log file placed alongside its output directory. Only Snakemake progress messages are printed to the terminal during a run; all RepeatMasker, RepeatModeler, HELIANO, and other tool output is captured in per-rule logs for easier post-hoc debugging.
 - 🛡️ **RepeatModeler small-genome robustness** *(improved in v0.1.7)* — The pipeline now computes the samplable genome size (contigs ≥ 40 kb only) and automatically sets `-genomeSampleSizeMax` to prevent RepeatModeler from attempting a round for which insufficient unmasked sequence remains. See [Troubleshooting](#troubleshooting) for details.
 - 🔧 **RepeatMasker cache-directory compatibility** *(improved in v0.1.8)* — The species-library warmup now discovers the `CONS-*` cache directory dynamically rather than hardcoding `CONS-Dfam_withRBRM_3.9`. This fixes a failure on installations configured with Dfam only (no RepBase), where the directory has a different name.
+- 📏 **CD-HIT length-difference cutoff** *(new in v0.1.8)* — A new `clustering_length_diff` parameter (default `0.5`) passes the `-s` flag to `cd-hit-est`, preventing sequences that are less than half the length of the cluster representative from being grouped together. This avoids biologically misleading clusters where small partial elements are merged with full-length copies.
 
 ---
 
 ## 🆕 Changes in Latest Release (v0.1.8)
+
+### CD-HIT length-difference cutoff
+
+Previously, `cd-hit-est` was run with `-aS` (alignment coverage of the shorter sequence) and `-G 0` (local alignment mode) but no constraint on the *length ratio* between sequences. Under these settings a short partial element (e.g. 1 000 nt) could be clustered with a full-length copy (e.g. 20 000 nt) as long as 80 % of the short sequence aligned somewhere within the long one. This produces clusters that span a ~20-fold length range, potentially merging biologically distinct elements.
+
+A new `clustering_length_diff` parameter (default `0.5`) is now passed to `cd-hit-est` as the `-s` flag. The shorter sequence must be at least this fraction of the longer sequence's length to be placed in the same cluster. At the default value of `0.5`, sequences must be within a 2× length ratio — eliminating the most extreme mismatches while still allowing partial elements from the same family to cluster together.
+
+The parameter is fully configurable via `config.yaml`:
+
+```yaml
+clustering_length_diff: 0.5  # 0.0 = no limit; 1.0 = identical lengths only
+```
 
 ### Dynamic discovery of RepeatMasker species-library cache directory
 
@@ -518,10 +531,13 @@ custom_library: "/path/to/lib.fa"   # Use custom library
 ### Clustering Options
 
 ```yaml
-skip_clustering: false     # Set true to skip clustering
-clustering_identity: 0.8   # cd-hit identity threshold (0.0-1.0)
-clustering_coverage: 0.8   # cd-hit coverage threshold (0.0-1.0)
+skip_clustering: false       # Set true to skip clustering
+clustering_identity: 0.8     # cd-hit identity threshold (0.0-1.0)
+clustering_coverage: 0.8     # cd-hit coverage threshold (0.0-1.0)
+clustering_length_diff: 0.5  # cd-hit -s: shorter seq >= this fraction of longer (0.0 = no limit)
 ```
+
+`clustering_length_diff` prevents sequences of very different sizes from being merged into the same cluster. At the default of `0.5` the shorter sequence must be at least half the length of the cluster representative. Set to `0.0` to restore the previous behaviour (no length restriction).
 
 ### Output Options
 

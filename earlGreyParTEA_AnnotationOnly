@@ -111,6 +111,7 @@ min_consensus_seqs: 3
 skip_clustering: false
 clustering_identity: 0.8
 clustering_coverage: 0.8
+clustering_length_diff: 0.5
 
 # Output options
 softmask: true          # Generate softmasked genome for each input

@@ -2255,6 +2255,23 @@ log: "{outdir}/combinedLibraries/cluster_all_species.log"
 
 ## Release v0.1.8 Feature Updates
 
+### CD-HIT length-difference cutoff for clustering (`clustering_length_diff`)
+
+**Problem:** The `cd-hit-est` command was invoked with `-aS` (alignment coverage of the shorter sequence) and `-G 0` (local alignment mode) but no constraint on the *length ratio* between sequences. Under these settings a small partial TE consensus (e.g. 1 000 nt) could be placed in the same cluster as a full-length copy (e.g. 20 000 nt) provided ~80 % of the short sequence aligned somewhere within the long one. Clusters spanning a 10–20× length range can merge biologically distinct elements (e.g. an LTR solo with a complete LTR retrotransposon) and produce misleading cluster representatives.
+
+**Fix:** A new `clustering_length_diff` parameter is exposed in `config.yaml` (default `0.5`) and passed to `cd-hit-est` as the `-s` flag. This requires the shorter sequence to be at least this fraction of the longer sequence's length before clustering is allowed. At the default value of `0.5`, sequences must be within a 2× length ratio — removing the most extreme mismatches while still permitting partial elements from the same family to cluster.
+
+Set to `0.0` to restore the previous behaviour (no length restriction).
+
+**Files changed:**
+- `config/config.yaml` — new `clustering_length_diff: 0.5` parameter
+- `rules/clustering.smk` — `cluster_length_diff` param added; `-s {params.cluster_length_diff}` added to `cd-hit-est` call
+- `scripts/on_start_functions.py` — default added to `validate_parameters`; startup message updated to include `length_diff`
+- `earlGreyParTEA`, `earlGreyParTEA_LibConstruct`, `earlGreyParTEA_AnnotationOnly` — `clustering_length_diff: 0.5` added to generated config templates
+- `README.md` — v0.1.8 section updated; Clustering Options docs updated
+
+---
+
 ### Dynamic discovery of RepeatMasker species-library cache directory
 
 **Problem:** The `repeatmasker_warmup` rule hardcoded the species-library BLAST cache parent directory as `$RM_SHARE/Libraries/CONS-Dfam_withRBRM_3.9`. This path is only present when the RepeatMasker installation includes both Dfam **and** RepBase RepeatMasker edition (RBRMSK). Users who configured RepeatMasker with Dfam only (or a future Dfam version with a different suffix) have a differently-named directory (e.g. `CONS-Dfam_3.9`). In those environments the warmup checked and rebuilt the cache in the wrong location — the real cache directory was never validated before the parallel genome jobs started.
@@ -2277,3 +2294,7 @@ This executes after the general-library warmup (which ensures the `Libraries/` d
 - [ ] Run pipeline with `repeatmasker_species` set on an installation configured with Dfam **only** (no RepBase). Confirm warmup locates the `CONS-Dfam_*` directory and validates/builds the species cache correctly.
 - [ ] Run pipeline on a standard installation with both Dfam and RepBase. Confirm existing behaviour is unchanged.
 - [ ] Confirm that if the `Libraries/` directory contains no `CONS-*` subdirectory the warmup prints the expected warning and the pipeline does not proceed with species-cache validation.
+- [ ] Run clustering on a multi-genome dataset and confirm that sequences with a length ratio > 2× (e.g. ~1 000 nt vs ~20 000 nt) are no longer grouped in the same cluster.
+- [ ] Confirm that setting `clustering_length_diff: 0.0` in the config restores the previous behaviour (no length restriction), and that sequences of very different sizes can still be clustered.
+- [ ] Confirm the startup summary prints `length_diff:` alongside `identity:` and `coverage:` when clustering is enabled.
+- [ ] Confirm `--generate-config` output from all three wrapper scripts includes `clustering_length_diff: 0.5`.

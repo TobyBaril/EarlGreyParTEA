@@ -19,7 +19,8 @@ rule cluster_all_species:
         repspec=REPSPEC,
         skip_clustering=config.get("skip_clustering", False),
         cluster_identity=config.get("clustering_identity", 0.8),
-        cluster_coverage=config.get("clustering_coverage", 0.8)
+        cluster_coverage=config.get("clustering_coverage", 0.8),
+        cluster_length_diff=config.get("clustering_length_diff", 0.5)
     run:
         import os
         shell("mkdir -p {params.outdir}/combinedLibraries >> " + str(log) + " 2>&1")
@@ -68,7 +69,7 @@ rule cluster_all_species:
         else:
             # Run cd-hit-est clustering with config parameters
             shell(f"cd-hit-est -d 0 -aS {{params.cluster_coverage}} -c {{params.cluster_identity}} "
-                  f"-G 0 -g 1 -b 500 -r 1 "
+                  f"-s {{params.cluster_length_diff}} -G 0 -g 1 -b 500 -r 1 "
                   f"-i {combined_file} -o {{output.combined}} "
                   f"-M {{resources.mem_mb}} -T {{threads}} >> " + str(log) + " 2>&1")
             
