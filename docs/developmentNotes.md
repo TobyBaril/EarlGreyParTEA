@@ -2371,12 +2371,12 @@ chimera_min_component_span: 0.1 # each component must span >= this fraction of r
 - [ ] Run pipeline with `repeatmasker_species` set on an installation configured with Dfam **only** (no RepBase). Confirm warmup locates the `CONS-Dfam_*` directory and validates/builds the species cache correctly.
 - [ ] Run pipeline on a standard installation with both Dfam and RepBase. Confirm existing behaviour is unchanged.
 - [x] Confirm that if the `Libraries/` directory contains no `CONS-*` subdirectory the warmup prints the expected warning and the pipeline does not proceed with species-cache validation. *(TestCacheDiscovery::test_no_cons_dir_exits_zero_with_warning)*
-- [ ] Run clustering on a multi-genome dataset and confirm that sequences with a length ratio > 2× (e.g. ~1 000 nt vs ~20 000 nt) are no longer grouped in the same cluster. *(run `pytest -m integration` in env)*
-- [ ] Confirm that setting `clustering_length_diff: 0.0` in the config restores the previous behaviour (no length restriction), and that sequences of very different sizes can still be clustered. *(run `pytest -m integration` in env)*
+- [x] Run clustering on a multi-genome dataset and confirm that sequences with a length ratio > 2× (e.g. ~1 000 nt vs ~20 000 nt) are no longer grouped in the same cluster. *(TestCdhitIntegration::test_length_diff_prevents_extreme_size_mismatch)*
+- [x] Confirm that setting `clustering_length_diff: 0.0` in the config restores the previous behaviour (no length restriction), and that sequences of very different sizes can still be clustered. *(TestCdhitIntegration::test_length_diff_zero_allows_clustering)*
 - [x] Confirm the startup summary prints `length_diff:` alongside `identity:` and `coverage:` when clustering is enabled. *(TestStartupMessages::test_length_diff_reported_in_message)*
 - [x] Confirm `--generate-config` output from all three wrapper scripts includes `clustering_length_diff: 0.5`. *(TestGenerateConfig — full + libconstruct wrappers)*
-- [ ] Set `clustering_coverage_long: 0.75` and re-run clustering on a dataset with known chimeric clusters (e.g. arabidopsis combinedLibraries). Confirm sequences aligning to <75% of the representative's length are no longer placed in the same cluster. *(run `pytest -m integration` in env)*
-- [ ] Confirm `clustering_coverage_long: 0.0` (default) restores the original `-aL 0.0` behaviour. *(run `pytest -m integration` in env)*
+- [x] Set `clustering_coverage_long: 0.75` and re-run clustering on a dataset with known chimeric clusters (e.g. arabidopsis combinedLibraries). Confirm sequences aligning to <75% of the representative's length are no longer placed in the same cluster. *(TestCdhitIntegration::test_aL_prevents_short_in_long_cluster)*
+- [x] Confirm `clustering_coverage_long: 0.0` (default) restores the original `-aL 0.0` behaviour. *(TestCdhitIntegration::test_aL_zero_does_not_restrict)*
 - [x] Confirm the startup message correctly reports `aL: disabled` when `clustering_coverage_long: 0.0` and reports the value when non-zero. *(TestStartupMessages::test_aL_disabled_message_when_zero + test_aL_value_reported_when_nonzero)*
 - [x] Confirm `--generate-config` output from all three wrapper scripts includes `clustering_coverage_long: 0.0`. *(TestGenerateConfig — full + libconstruct wrappers)*
 - [ ] Enable `split_chimeras: true` on a multi-genome dataset and confirm `combined_all_species.chimera_split.fa` and `chimera_detection_summary.tsv` are produced.
@@ -2399,30 +2399,31 @@ pytest tests/test_v018_features.py -v -m integration
 
 Expected: 4 tests pass (`test_length_diff_prevents_extreme_size_mismatch`, `test_length_diff_zero_allows_clustering`, `test_aL_prevents_short_in_long_cluster`, `test_aL_zero_does_not_restrict`).
 
----
+These passed!
 
 #### Items 1, 2 — RepeatMasker warmup with a real species library
 
 Items 1 and 2 require a full pipeline run on a machine with RepeatMasker and a real Dfam/RepBase species library installed. Add `repeatmasker_species` to config and run:
 
 ```bash
-# Add to config.yaml:
-#   repeatmasker_species: "7215"   # or appropriate taxon ID
+cd /data/toby/testDIR/drosophila_testSet
 
-earlGreyParTEA -c <your_config.yaml> --threads <N>
+earlGreyParTEA --generate-config test12_018.yaml --genome-dir /data/toby/testDIR/drosophila_testSet --output-dir /data/toby/testDIR/
+
+earlGreyParTEA -c /data/toby/testDIR/drosophila_testSet/test12_018.yaml --threads 16
 
 # After the warmup step completes, confirm the cache was built:
 RM_SHARE=$(which RepeatMasker | sed 's|/bin/RepeatMasker$|/share/RepeatMasker|')
 find "$RM_SHARE/Libraries" -maxdepth 1 -type d -name "CONS-*"
-# should print the discovered directory (CONS-Dfam_3.9 or CONS-Dfam_withRBRM_3.9)
+# /data/toby/miniforge3/envs/partea_018/share/RepeatMasker/Libraries/CONS-Dfam_withRBRM_3.9
 
-find "$RM_SHARE/Libraries/CONS-*/7215" -name "refineableHash.dat"
-# should exist after a successful warmup
+find $RM_SHARE/Libraries/CONS-*/7215 -name "refineableHash.dat"
+# /data/toby/miniforge3/envs/partea_018/share/RepeatMasker/Libraries/CONS-Dfam_withRBRM_3.9/7215/refineableHash.dat
 ```
 
 For item 2 (standard installation, unchanged behaviour) simply run the same config and confirm the pipeline completes.normally.
 
----
+This run worked perfectly! The warmup built the `7215/` cache with `refineableHash.dat` as expected, and the pipeline completed without issue.
 
 #### Item 12 — Full `split_chimeras` pipeline run
 
@@ -2433,7 +2434,9 @@ For item 2 (standard installation, unchanged behaviour) simply run the same conf
 #   chimera_min_members: 3
 #   chimera_min_component_span: 0.1
 
-earlGreyParTEA -c <your_config.yaml> --threads <N>
+earlGreyParTEA --generate-config /data/toby/testDIR/test_splitChimeras_018/test_splitChimeras_018.yaml --genome-dir /data/toby/testDIR/drosophila_testSet --output-dir /data/toby/testDIR/test_splitChimeras_018
+
+earlGreyParTEA -c /data/toby/testDIR/test_splitChimeras_018/test_splitChimeras_018.yaml --threads 16
 
 # Check both output files were created:
 ls <output_dir>/combinedLibraries/combined_all_species.chimera_split.fa
@@ -2441,6 +2444,93 @@ ls <output_dir>/combinedLibraries/chimera_detection_summary.tsv
 
 # Quick sanity check — count chimeric entries:
 grep -c "_CHIMERA" <output_dir>/combinedLibraries/combined_all_species.chimera_split.fa
+```
+
+No chimeras were detected in this run. This is expected: see **"When chimeric TEs are actually found"** below.
+
+---
+
+#### When chimeric TEs are actually found
+
+**Why the drosophila test produced no chimeras**
+
+Two factors suppress chimera detection in this run:
+
+1. **`clustering_coverage_long` (the `-aL` flag) actively prevents chimeric clustering from forming.** When `-aL > 0`, a short sequence can only cluster with a much longer representative if the alignment covers ≥ `aL` fraction of the representative's length. Members from a second TE family that align only to a narrow window of a long chimeric representative (e.g. covering only 10–30% of the rep) do not meet this threshold and are not placed in the cluster at all. With those members absent, the two populations of alignment windows needed to trigger chimera detection never appear in the `.clstr` file.
+
+2. **The drosophila test set is a small, well-annotated dataset.** Chimeric BEAT consensus sequences most commonly arise from larger, less-characterised genomes where EarlGrey builds consensus sequences across complex TE landscapes.
+
+**The paradox: tighter clustering filters → fewer chimeras detectable**
+
+| Parameter | Effect on chimera detection |
+|---|---|
+| `clustering_coverage_long: 0.0` (default, disabled) | Most permissive — sequences of any length can cluster, including short members that reveal chimeric structure |
+| `clustering_coverage_long: 0.75` | Short sequences aligning to < 75 % of the representative are excluded → fewer members per chimeric cluster → harder to detect |
+| `clustering_length_diff: 0.0` (disabled) | No length ratio constraint → extreme-length pairs can cluster |
+| `clustering_length_diff: 0.5` (default) | Sequences must be within 2× length ratio |
+
+The `-aL` and `-s` filters primarily *prevent* chimeric clustering from occurring; `split_chimeras` catches chimeras that survive despite those filters. Running clustering with `-aL 0.0` (disabled) will allow more members to enter each cluster and makes chimeras more detectable, at the cost of allowing more extreme length mismatches.
+
+**Conditions most likely to produce detectable chimeras**
+
+- `clustering_coverage_long: 0.0` (disabled)
+- Large, complex genomes (e.g. plants, polyploids, large arthropods)
+- Datasets with many LTR retrotransposons (LTR termini are shared across families and seed chimeric BEAT consensus building)
+- Many genomes pooled: more opportunities for a chimeric representative from one genome to absorb members from others
+
+**Standalone chimera detection test (fixture files)**
+
+Test fixture files in `tests/fixtures/` contain a synthetic chimeric cluster:
+
+| File | Contents |
+|---|---|
+| `chimera_test.clstr` | 2 clusters; cluster 0 has members aligning to pos 1–500 (DNA/hAT) and 1400–2000 (LINE/L1) on a 2000 nt rep |
+| `chimera_test_clustered.fa` | Cluster representative sequences |
+| `chimera_test_combined.fa` | All pre-clustering sequences with original headers |
+
+Expected output of `split_chimeras.py` on these fixtures:
+- `rep_chimeric_CHIMERA#Unknown` — original chimeric representative labelled and retained
+- `>sp1_hAT#DNA/hAT EarlGrey_annotation` — component 1 rep (longest DNA/hAT member), original header preserved
+- `>sp1_L1#LINE/L1 EarlGrey_annotation` — component 2 rep (longest LINE/L1 member), original header preserved
+- `sp1_Tc1#DNA/TcMar-Tc1` — clean non-chimeric cluster passes through unchanged
+- Chimera score = 0.45 (900 nt gap / 2000 nt rep length)
+
+Run the fixture test via the existing unit test suite:
+
+```bash
+cd /data/toby/EarlGreyParTEA
+conda run -n partea_018 pytest tests/test_v018_features.py::TestMainIntegration -v
+```
+
+Or run the script directly against the fixture files:
+
+```bash
+cd /data/toby/EarlGreyParTEA
+conda run -n partea_018 python3 - <<'PYEOF'
+import sys; sys.path.insert(0, 'scripts')
+import split_chimeras as sc
+from types import SimpleNamespace
+
+FIXTURES = 'tests/fixtures'
+sc.__dict__['snakemake'] = SimpleNamespace(
+    input=SimpleNamespace(
+        clstr=f'{FIXTURES}/chimera_test.clstr',
+        clustered_fa=f'{FIXTURES}/chimera_test_clustered.fa',
+        combined_fa=f'{FIXTURES}/chimera_test_combined.fa',
+    ),
+    output=SimpleNamespace(
+        fasta='/tmp/chimera_split.fa',
+        summary='/tmp/chimera_detection_summary.tsv',
+    ),
+    log=['/tmp/chimera_test.log'],
+    params=SimpleNamespace(overlap_min=50, min_members=3, min_component_span=0.1),
+)
+sc.main()
+for line in open('/tmp/chimera_split.fa'):
+    if line.startswith('>'): print(line.rstrip())
+print()
+print(open('/tmp/chimera_detection_summary.tsv').read())
+PYEOF
 ```
 
 ---

@@ -76,6 +76,7 @@ def show_pipeline_mode_visualization(pipeline_mode, config):
             'repeatmodeler': {'libconstruct': '✓', 'annotate': '✗', 'full': '✓'},
             'testrainer': {'libconstruct': '✓', 'annotate': '✗', 'full': '✓'},
             'clustering': {'libconstruct': '✓', 'annotate': '✗', 'full': '✓'},
+            'split_chimeras': {'libconstruct': '○', 'annotate': '✗', 'full': '○'},
             'saturation_plot': {'libconstruct': '✓', 'annotate': '✗', 'full': '✓'},
         },
         'Annotation': {
@@ -120,6 +121,8 @@ def show_pipeline_mode_visualization(pipeline_mode, config):
                     status = '✓' if softmask else '✗'
                 elif rule_name == 'repeatmasker_initial':
                     status = '✓' if (repeatmasker_species or custom_library) else '✗'
+                elif rule_name == 'split_chimeras':
+                    status = '✓' if (config.get('split_chimeras', False) and not skip_clustering) else '✗'
                 elif rule_name in (
                     'shared_unique_plot (cluster)',
                     'shared_unique_pa_plot (presence/abs)',

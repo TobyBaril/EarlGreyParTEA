@@ -108,7 +108,7 @@ min_consensus_seqs: 3   # Min sequences required for consensus
 
 # Clustering options (for combining TE libraries from multiple genomes)
 skip_clustering: false          # Set to true to skip clustering (just concatenate)
-clustering_identity: 0.8        # cd-hit sequence identity threshold (0.0-1.0)
+clustering_identity: 0.8        # cd-hit -c: sequence identity threshold (0.0-1.0)
 clustering_coverage: 0.8        # cd-hit -aS: alignment coverage of shorter seq (0.0-1.0)
 clustering_coverage_long: 0.0   # cd-hit -aL: alignment coverage of longer seq (0.0 = no limit; 0.75 recommended
                                 #              to prevent chimeric long seqs acting as cluster hubs)

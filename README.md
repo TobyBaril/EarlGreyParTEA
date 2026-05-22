@@ -115,6 +115,8 @@ Even after applying `-s` and `-aL` constraints at clustering time, some chimeric
 
 The output is written to `combined_all_species.chimera_split.fa`. When `split_chimeras: true`, downstream annotation uses this file rather than the standard `combined_all_species.clstrd.fa`. The original clustered FASTA is always preserved.
 
+> **Note:** Chimera detection is most sensitive when `clustering_coverage_long: 0.0` (the default). Tighter `-aL` values prevent short cross-family members from entering clusters in the first place, leaving fewer alignment-window contrasts for the algorithm to work with. See [Chimera Detection Options](#chimera-detection-options) for guidance on conditions most likely to produce detectable chimeras.
+
 **Config:**
 
 ```yaml
@@ -597,6 +599,16 @@ chimera_overlap_min: 50         # min nt overlap between member alignment window
 chimera_min_members: 3          # min non-representative members to test a cluster
 chimera_min_component_span: 0.1 # each component must span >= this fraction of rep length
 ```
+
+**When chimeric TEs are most likely to be detected**
+
+Chimeric cluster representatives arise from EarlGrey's iterative BEAT consensus-building process joining two distinct TE families end-to-end. They are most common in:
+
+- **Large, complex genomes** (plants, polyploids, large arthropods) with dense, diverse TE landscapes
+- **Datasets with many LTR retrotransposons** — shared LTR termini can seed BEAT consensus building across family boundaries
+- **Many pooled genomes** — more opportunities for a chimeric representative from one genome to attract members from different families in others
+
+> **Important interaction with clustering filters:** The `-aL` (`clustering_coverage_long`) and `-s` (`clustering_length_diff`) parameters primarily *prevent* chimeric clustering from forming. When `-aL > 0`, members that align to only a narrow window of a long chimeric representative are excluded from the cluster entirely — meaning the algorithm has fewer alignment-window contrasts to work with and is less able to flag the representative as chimeric. Chimera detection is therefore most sensitive when `clustering_coverage_long: 0.0` (the default).
 
 ### Output Options
 
