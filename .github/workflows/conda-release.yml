@@ -73,7 +73,7 @@ jobs:
       - name: Lint the conda recipe
         shell: bash -l {0}
         run: |
-          conda build --check conda/ -c conda-forge -c bioconda
+          conda build --check conda/
 
       - name: Build the conda package
         shell: bash -l {0}
