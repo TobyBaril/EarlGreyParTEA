@@ -235,7 +235,15 @@ ParTEA orchestrates TE analysis across multiple genomes with smart parallelizati
                     │     cluster_all_species             │
                     │   • Combine all TE libraries        │
                     │   • Optional: cd-hit clustering     │
+                    │     (-c/-aS/-aL/-s filters)         │
                     │   • Add RepeatMasker/custom lib     │
+                    └────────────┬────────────────────────┘
+                                 │
+                    ┌────────────▼────────────────────────┐
+                    │  split_chimeras (optional)          │
+                    │  • Detect chimeric cluster reps     │
+                    │  • Replace with component reps      │
+                    │  (split_chimeras: true required)    │
                     └────────────┬────────────────────────┘
                                  │
           ┌──────────────────────┼──────────────────────────┐
@@ -282,6 +290,7 @@ ParTEA orchestrates TE analysis across multiple genomes with smart parallelizati
 
 - **🎨 HELIANO detection** (`run_heliano: true/false`) - Helitron-specific detection
 - **🔄 Clustering** (`skip_clustering: true/false`) - Merge similar TEs across genomes
+- **🧩 Chimera detection** (`split_chimeras: true`) - Post-clustering detection and splitting of chimeric cluster representatives into biologically distinct component clusters; requires `skip_clustering: false` *(v0.1.8)*
 - **🎭 Initial masking** (`repeatmasker_species` or `custom_library`) - Pre-mask known repeats
 - **📈 TE saturation analysis** (`saturation_permutations: N`) - Accumulation curve showing TE family discovery rate across genomes (full/libconstruct modes)
 - **🔀 Shared/unique TE content** (`run_shared_unique: true`) - Bar charts of shared vs unique TE families across genomes (full/annotate modes)
@@ -493,6 +502,8 @@ earlGreyParTEA_LibConstruct -c config.yaml -t 16
 **What you get:**
 - 📚 `{output_dir}/combinedLibraries/combined_all_species.clstrd.fa` — pangenome TE library
 - 🗂️ `{output_dir}/combinedLibraries/combined_all_species.clstrd.fa.clstr` — cd-hit cluster membership file
+- 🧩 `{output_dir}/combinedLibraries/combined_all_species.chimera_split.fa` — chimera-resolved library *(if `split_chimeras: true`)*
+- 📋 `{output_dir}/combinedLibraries/chimera_detection_summary.tsv` — per-cluster chimera report *(if `split_chimeras: true`)*
 - 📈 `{output_dir}/combinedLibraries/saturation_plot.pdf` — TE family accumulation curve
 - 📊 `{output_dir}/combinedLibraries/saturation_data.tsv` — tabular saturation statistics
 
@@ -751,15 +762,22 @@ output_dir/
 ├── combinedLibraries/
 │   ├── combined_all_species.clstrd.fa          # Pangenome TE library (clustered)
 │   ├── combined_all_species.clstrd.fa.clstr    # cd-hit cluster membership file
+│   ├── combined_all_species.chimera_split.fa   # (if split_chimeras: true) library after chimera splitting
+│   ├── chimera_detection_summary.tsv           # (if split_chimeras: true) per-cluster chimera report
+│   ├── split_chimeras.log                      # (if split_chimeras: true) chimera detection log
 │   ├── saturation_plot.pdf                     # TE family accumulation curve
 │   └── saturation_data.tsv                     # Tabular saturation statistics
 │                                               # (full/libconstruct modes only)
 │
 ├── species1_EarlGrey/
-│   ├── species1_Database/              # RepeatModeler database
-│   ├── species1_RepeatModeler/         # RepeatModeler working files
-│   ├── species1_strainer/              # TEstrainer output
-│   ├── species1_RepeatMasker_Against_Custom_Library/  # RepeatMasker annotation run
+│   ├── species1_Database/
+│   │   └── species1.build_db.log       # per-rule log
+│   ├── species1_RepeatModeler/
+│   │   └── species1.repeatmodeler.log  # per-rule log
+│   ├── species1_strainer/
+│   │   └── species1.testrainer.log     # per-rule log
+│   ├── species1_RepeatMasker_Against_Custom_Library/
+│   │   └── species1.repeatmasker_annotation.log  # per-rule log
 │   ├── species1_mergedRepeats/         # Merged, filtered annotation tracks
 │   ├── species1_RepeatLandscape/       # Divergence landscape plots
 │   └── species1_summaryFiles/          # Final per-genome outputs
@@ -940,6 +958,7 @@ In local mode, `-t` sets total cores for the machine and are shared across genom
 | `repeatmodeler` | `-t` value | 32 GB (×attempt) | 1 week |
 | `testrainer` | `-t` value | 32 GB (×attempt) | 1 week |
 | `cluster_all_species` | up to 32 | 32 GB (×attempt) | 8 h |
+| `split_chimeras` | 1 | 4 GB | 30 min |
 | `repeatmasker_annotation` | `-t` value | 16 GB (×attempt) | 8 h |
 | `saturation_plot` | 1 | 4 GB | 30 min |
 

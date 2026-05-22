@@ -33,7 +33,6 @@ requirements:
     - mafft
     - clipkit
     - fasttree
-    - phykit
 
 test:
   requires:

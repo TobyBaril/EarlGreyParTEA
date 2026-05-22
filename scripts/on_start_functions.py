@@ -231,6 +231,14 @@ def validate_parameters(config, outfile = None):
         cluster_cov = config.get('clustering_coverage', 0.8)
         cluster_cov_long = config.get('clustering_coverage_long', 0.0)
         cluster_len = config.get('clustering_length_diff', 0.5)
+        if not (0.0 < cluster_id <= 1.0):
+            msg_error(f"clustering_identity={cluster_id} is out of range. Must be between 0 (exclusive) and 1 (inclusive).")
+        if not (0.0 < cluster_cov <= 1.0):
+            msg_error(f"clustering_coverage={cluster_cov} is out of range. Must be between 0 (exclusive) and 1 (inclusive).")
+        if not (0.0 <= cluster_cov_long <= 1.0):
+            msg_error(f"clustering_coverage_long={cluster_cov_long} is out of range. Must be between 0.0 and 1.0.")
+        if not (0.0 < cluster_len <= 1.0):
+            msg_error(f"clustering_length_diff={cluster_len} is out of range. Must be between 0 (exclusive) and 1 (inclusive).")
         aL_note = f", aL: {cluster_cov_long}" if cluster_cov_long > 0.0 else " (aL: disabled)"
         msg_info(f"TE consensus sequences will be clustered (identity: {cluster_id}, aS: {cluster_cov}, length_diff: {cluster_len}{aL_note})")
         if cluster_cov_long > 0.0:
@@ -241,6 +249,12 @@ def validate_parameters(config, outfile = None):
             ovlp = config.get('chimera_overlap_min', 50)
             min_mem = config.get('chimera_min_members', 3)
             span = config.get('chimera_min_component_span', 0.1)
+            if not (ovlp > 0):
+                msg_error(f"chimera_overlap_min={ovlp} must be a positive integer.")
+            if not (min_mem >= 1):
+                msg_error(f"chimera_min_members={min_mem} must be >= 1.")
+            if not (0.0 < span <= 1.0):
+                msg_error(f"chimera_min_component_span={span} is out of range. Must be between 0 (exclusive) and 1 (inclusive).")
             msg_info(f"Chimera detection enabled (overlap_min: {ovlp} nt, min_members: {min_mem}, min_component_span: {span})")
         else:
             msg_info("Chimera detection disabled (split_chimeras: false)")
