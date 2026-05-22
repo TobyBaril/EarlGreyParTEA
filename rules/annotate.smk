@@ -10,10 +10,22 @@ _heliano_val = config.get("heliano", config.get("run_heliano", False))
 HELIANO = "yes" if (_heliano_val is True or _heliano_val == "yes") else "no"
 SCRIPT_DIR = config["script_dir"]  # Path to EarlGrey scripts directory
 
+# Choose the library file for annotation: chimera-split (when enabled) or
+# the standard clustered library. The original clstrd.fa is always kept.
+_use_chimera_split = (
+    config.get('split_chimeras', False)
+    and not config.get('skip_clustering', False)
+)
+ANNOTATION_LIBRARY = (
+    f"{OUTDIR}/combinedLibraries/combined_all_species.chimera_split.fa"
+    if _use_chimera_split
+    else f"{OUTDIR}/combinedLibraries/combined_all_species.clstrd.fa"
+)
+
 rule repeatmasker_annotation:
     input:
         genome="{outdir}/{species}_EarlGrey/{species}.prep",
-        library=f"{OUTDIR}/combinedLibraries/combined_all_species.clstrd.fa",
+        library=ANNOTATION_LIBRARY,
         _cache=f"{OUTDIR}/.repeatmasker_cache_ready"
     output:
         masked="{outdir}/{species}_EarlGrey/{species}_RepeatMasker_Against_Custom_Library/{species}.prep.masked",

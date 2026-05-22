@@ -68,6 +68,8 @@ ParTEA extends EarlGrey with features designed for multi-genome comparative TE a
 - 🛡️ **RepeatModeler small-genome robustness** *(improved in v0.1.7)* — The pipeline now computes the samplable genome size (contigs ≥ 40 kb only) and automatically sets `-genomeSampleSizeMax` to prevent RepeatModeler from attempting a round for which insufficient unmasked sequence remains. See [Troubleshooting](#troubleshooting) for details.
 - 🔧 **RepeatMasker cache-directory compatibility** *(improved in v0.1.8)* — The species-library warmup now discovers the `CONS-*` cache directory dynamically rather than hardcoding `CONS-Dfam_withRBRM_3.9`. This fixes a failure on installations configured with Dfam only (no RepBase), where the directory has a different name.
 - 📏 **CD-HIT length-difference cutoff** *(new in v0.1.8)* — A new `clustering_length_diff` parameter (default `0.5`) passes the `-s` flag to `cd-hit-est`, preventing sequences that are less than half the length of the cluster representative from being grouped together. This avoids biologically misleading clusters where small partial elements are merged with full-length copies.
+- 🔗 **CD-HIT long-sequence coverage filter** *(new in v0.1.8)* — A new `clustering_coverage_long` parameter (default `0.0` = disabled) passes the `-aL` flag to `cd-hit-est`, requiring the alignment to cover at least this fraction of the *longer* sequence. Setting `0.75` prevents chimeric or over-extended consensus sequences from acting as cluster hubs and absorbing unrelated shorter elements. Because alignment length ≤ shorter sequence length, `-aL 0.75` mathematically enforces a maximum ~1.33× length ratio between cluster members.
+- 🧩 **Post-clustering chimera detection** *(new in v0.1.8)* — An optional `split_chimeras: true` step detects cluster representatives whose members align to mutually exclusive, non-overlapping regions — the hallmark of a chimeric consensus built from two distinct TE families. Each chimeric representative is relabelled `_CHIMERA` and replaced by a component-specific representative drawn directly from the pre-clustering FASTA (original header preserved). The resulting `combined_all_species.chimera_split.fa` is used for downstream annotation when the feature is enabled.
 
 ---
 
@@ -84,6 +86,49 @@ The parameter is fully configurable via `config.yaml`:
 ```yaml
 clustering_length_diff: 0.5  # 0.0 = no limit; 1.0 = identical lengths only
 ```
+
+### CD-HIT long-sequence coverage filter
+
+Even with the length-difference cutoff, a very long consensus sequence can still act as a cluster hub if it is chimeric — i.e. if it was assembled from two or more distinct TE families joined end-to-end. A 20 000 nt chimera can accept a 15 000 nt member (within the 2× ratio allowed by `-s 0.5`) simply because 75 % of the member's length aligns to one end of the chimera, leaving the other end of the chimera unaccounted for.
+
+The new `-aL` flag (`clustering_coverage_long`) requires the alignment to cover at least a given fraction of the *longer* sequence. Because alignment length ≤ shorter sequence length, requiring `-aL x` implicitly enforces `shorter/longer ≥ x`:
+
+$$\text{alignment} \geq \text{aL} \times \text{longer} \quad\Rightarrow\quad \frac{\text{shorter}}{\text{longer}} \geq \text{aL}$$
+
+| `clustering_coverage_long` | Max tolerated length ratio |
+|---|---|
+| 0.0 (default) | no limit (previous behaviour) |
+| 0.5 | ~2× |
+| 0.75 | ~1.33× (recommended) |
+
+Set to `0.0` to disable (default, backward compatible).
+
+### Post-clustering chimera detection and cluster splitting
+
+Even after applying `-s` and `-aL` constraints at clustering time, some chimeric representatives may survive — particularly where the component sub-sequences are individually long enough to pass both ratio tests. The new `split_chimeras` option adds a post-clustering detection and splitting step.
+
+**Detection** — for each cluster, the alignment coordinates of non-representative members on the representative are extracted from the `.clstr` file. An overlap graph is built: two members are in the same component if their alignment windows on the representative overlap by ≥ `chimera_overlap_min` nucleotides (default 50 nt). Connected components are found by BFS. If ≥ 2 components each spanning ≥ `chimera_min_component_span` fraction of the representative's length are found, the representative is flagged as chimeric.
+
+**Splitting** — for each chimeric cluster:
+1. The original representative is retained with a `_CHIMERA` suffix for traceability.
+2. For each component, the longest member sequence is retrieved from the pre-clustering combined FASTA with its **original header preserved**, and becomes the new representative for that component cluster.
+
+The output is written to `combined_all_species.chimera_split.fa`. When `split_chimeras: true`, downstream annotation uses this file rather than the standard `combined_all_species.clstrd.fa`. The original clustered FASTA is always preserved.
+
+> **Note:** Chimera detection is most sensitive when `clustering_coverage_long: 0.0` (the default). Tighter `-aL` values prevent short cross-family members from entering clusters in the first place, leaving fewer alignment-window contrasts for the algorithm to work with. See [Chimera Detection Options](#chimera-detection-options) for guidance on conditions most likely to produce detectable chimeras.
+
+**Config:**
+
+```yaml
+split_chimeras: false           # requires skip_clustering: false
+chimera_overlap_min: 50         # min nt overlap to connect two members in the same component
+chimera_min_members: 3          # min non-representative members to test a cluster
+chimera_min_component_span: 0.1 # each component must span >= this fraction of representative length
+```
+
+**Outputs** (written to `{output_dir}/combinedLibraries/`):
+- `combined_all_species.chimera_split.fa` — modified library used for annotation
+- `chimera_detection_summary.tsv` — per-cluster table with `is_chimeric`, `n_components`, `component_sizes`, `chimera_score` (largest inter-component gap / representative length), and `component_rep_names`
 
 ### Dynamic discovery of RepeatMasker species-library cache directory
 
@@ -531,13 +576,39 @@ custom_library: "/path/to/lib.fa"   # Use custom library
 ### Clustering Options
 
 ```yaml
-skip_clustering: false       # Set true to skip clustering
-clustering_identity: 0.8     # cd-hit identity threshold (0.0-1.0)
-clustering_coverage: 0.8     # cd-hit coverage threshold (0.0-1.0)
-clustering_length_diff: 0.5  # cd-hit -s: shorter seq >= this fraction of longer (0.0 = no limit)
+skip_clustering: false          # Set true to skip clustering
+clustering_identity: 0.8        # cd-hit -c: identity threshold (0.0-1.0)
+clustering_coverage: 0.8        # cd-hit -aS: alignment coverage of shorter seq (0.0-1.0)
+clustering_coverage_long: 0.0   # cd-hit -aL: alignment coverage of longer seq (0.0 = no limit)
+                                 #   0.75 recommended to prevent chimeric long seqs as cluster hubs
+clustering_length_diff: 0.5     # cd-hit -s: shorter seq >= this fraction of longer (0.0 = no limit)
 ```
 
-`clustering_length_diff` prevents sequences of very different sizes from being merged into the same cluster. At the default of `0.5` the shorter sequence must be at least half the length of the cluster representative. Set to `0.0` to restore the previous behaviour (no length restriction).
+`clustering_coverage_long` is the most effective guard against chimeric/over-extended representatives. Because the alignment cannot exceed the length of the shorter sequence, setting `-aL x` implicitly requires `shorter/longer ≥ x`. At `0.75` sequences must be within a ~1.33× length ratio. At `0.5` within ~2×. Default is `0.0` (disabled) for backward compatibility.
+
+`clustering_length_diff` prevents sequences of very different sizes from being merged. At `0.5` the shorter must be ≥ half the length of the representative. Set to `0.0` to disable.
+
+### Chimera Detection Options
+
+Requires `skip_clustering: false`. When enabled, runs after `cluster_all_species` and produces a separate FASTA used for downstream annotation.
+
+```yaml
+split_chimeras: false           # enable post-clustering chimera detection and splitting
+chimera_overlap_min: 50         # min nt overlap between member alignment windows to be
+                                 #   in the same component (lower = more sensitive)
+chimera_min_members: 3          # min non-representative members to test a cluster
+chimera_min_component_span: 0.1 # each component must span >= this fraction of rep length
+```
+
+**When chimeric TEs are most likely to be detected**
+
+Chimeric cluster representatives arise from EarlGrey's iterative BEAT consensus-building process joining two distinct TE families end-to-end. They are most common in:
+
+- **Large, complex genomes** (plants, polyploids, large arthropods) with dense, diverse TE landscapes
+- **Datasets with many LTR retrotransposons** — shared LTR termini can seed BEAT consensus building across family boundaries
+- **Many pooled genomes** — more opportunities for a chimeric representative from one genome to attract members from different families in others
+
+> **Important interaction with clustering filters:** The `-aL` (`clustering_coverage_long`) and `-s` (`clustering_length_diff`) parameters primarily *prevent* chimeric clustering from forming. When `-aL > 0`, members that align to only a narrow window of a long chimeric representative are excluded from the cluster entirely — meaning the algorithm has fewer alignment-window contrasts to work with and is less able to flag the representative as chimeric. Chimera detection is therefore most sensitive when `clustering_coverage_long: 0.0` (the default).
 
 ### Output Options
 

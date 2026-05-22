@@ -165,8 +165,14 @@ min_consensus_seqs: 3   # Min sequences required for consensus
 
 # Clustering options (for combining TE libraries from multiple genomes)
 skip_clustering: false          # Set to true to skip clustering (just concatenate)
-clustering_identity: 0.8        # cd-hit sequence identity threshold (0.0-1.0)
-clustering_coverage: 0.8        # cd-hit alignment coverage (0.0-1.0)
+clustering_identity: 0.8        # cd-hit -c: sequence identity threshold (0.0-1.0)
+clustering_coverage: 0.8        # cd-hit -aS: alignment coverage of shorter seq (0.0-1.0)
+clustering_coverage_long: 0.0   # cd-hit -aL: alignment coverage of longer seq (0.0 = no limit; 0.75 recommended)
+clustering_length_diff: 0.5     # cd-hit -s: shorter seq must be >= this fraction of longer (0.0 = no limit)
+split_chimeras: false           # Detect chimeric cluster representatives and split into component clusters
+chimera_overlap_min: 50         # Min nt overlap between two member alignment windows on representative
+chimera_min_members: 3          # Min non-representative members to test a cluster for chimeras
+chimera_min_component_span: 0.1 # Each component must span >= this fraction of representative length
 
 # Output options
 softmask: false         # Generate softmasked genome for each input
@@ -229,8 +235,14 @@ min_consensus_seqs: 3   # Min sequences required for consensus
 
 # Clustering options (for combining TE libraries from multiple genomes)
 skip_clustering: false          # Set to true to skip clustering (just concatenate)
-clustering_identity: 0.8        # cd-hit sequence identity threshold (0.0-1.0)
-clustering_coverage: 0.8        # cd-hit alignment coverage (0.0-1.0)
+clustering_identity: 0.8        # cd-hit -c: sequence identity threshold (0.0-1.0)
+clustering_coverage: 0.8        # cd-hit -aS: alignment coverage of shorter seq (0.0-1.0)
+clustering_coverage_long: 0.0   # cd-hit -aL: alignment coverage of longer seq (0.0 = no limit; 0.75 recommended)
+clustering_length_diff: 0.5     # cd-hit -s: shorter seq must be >= this fraction of longer (0.0 = no limit)
+split_chimeras: false           # Detect chimeric cluster representatives and split into component clusters
+chimera_overlap_min: 50         # Min nt overlap between two member alignment windows on representative
+chimera_min_members: 3          # Min non-representative members to test a cluster for chimeras
+chimera_min_component_span: 0.1 # Each component must span >= this fraction of representative length
 
 # Output options (not applicable in libconstruct mode)
 softmask: false
@@ -294,6 +306,12 @@ min_consensus_seqs: 3
 skip_clustering: false
 clustering_identity: 0.8
 clustering_coverage: 0.8
+clustering_coverage_long: 0.0
+clustering_length_diff: 0.5
+split_chimeras: false
+chimera_overlap_min: 50
+chimera_min_members: 3
+chimera_min_component_span: 0.1
 
 # Output options
 softmask: true          # Generate softmasked genome for each input
