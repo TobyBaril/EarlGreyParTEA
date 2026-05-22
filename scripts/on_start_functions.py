@@ -233,12 +233,12 @@ def validate_parameters(config, outfile = None):
         cluster_len = config.get('clustering_length_diff', 0.5)
         if not (0.0 < cluster_id <= 1.0):
             msg_error(f"clustering_identity={cluster_id} is out of range. Must be between 0 (exclusive) and 1 (inclusive).")
-        if not (0.0 < cluster_cov <= 1.0):
-            msg_error(f"clustering_coverage={cluster_cov} is out of range. Must be between 0 (exclusive) and 1 (inclusive).")
+        if not (0.0 <= cluster_cov <= 1.0):
+            msg_error(f"clustering_coverage={cluster_cov} is out of range. Must be between 0.0 and 1.0.")
         if not (0.0 <= cluster_cov_long <= 1.0):
             msg_error(f"clustering_coverage_long={cluster_cov_long} is out of range. Must be between 0.0 and 1.0.")
-        if not (0.0 < cluster_len <= 1.0):
-            msg_error(f"clustering_length_diff={cluster_len} is out of range. Must be between 0 (exclusive) and 1 (inclusive).")
+        if not (0.0 <= cluster_len <= 1.0):
+            msg_error(f"clustering_length_diff={cluster_len} is out of range. Must be between 0.0 and 1.0.")
         aL_note = f", aL: {cluster_cov_long}" if cluster_cov_long > 0.0 else " (aL: disabled)"
         msg_info(f"TE consensus sequences will be clustered (identity: {cluster_id}, aS: {cluster_cov}, length_diff: {cluster_len}{aL_note})")
         if cluster_cov_long > 0.0:
