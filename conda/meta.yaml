@@ -10,7 +10,7 @@ source:
   sha256: db4c746619eb1b26307f66d35b12be1b6860050e80843250c41d307205a81aa8
 
 build:
-  number: 0
+  number: 1
   noarch: python
   run_exports:
     - {{ pin_subpackage('earlgrey-partea', max_pin="x") }}
