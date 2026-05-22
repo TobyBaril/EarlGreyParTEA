@@ -154,7 +154,7 @@ class TestGffParsing:
         gff.write_text(GFF_CONTENT)
         _, hits = _gff_coverage_and_families(str(gff))
         # First hit: 101-200 = 100 bp
-        name, cls, bp = hits[0]
+        name, cls, bp, *_ = hits[0]
         assert name == "sp1_f1"
         assert bp == 100
 
