@@ -90,7 +90,7 @@ jobs:
       - name: Upload to Anaconda
         shell: bash -l {0}
         run: |
-          anaconda -t ${{ secrets.ANACONDA_API_TOKEN }} upload \
+          conda run -n base anaconda -t ${{ secrets.ANACONDA_API_TOKEN }} upload \
             --user toby_baril_bio \
             --force \
             "${PACKAGE_PATH}"
