@@ -8,7 +8,7 @@ on:
       version:
         description: 'Version to build (without leading v, e.g. 0.1.4)'
         required: true
-        default: '0.1.4'
+        default: '0.1.8'
 
 jobs:
   conda-build-and-deploy:
@@ -41,9 +41,9 @@ jobs:
 
       - name: Update conda/meta.yaml
         run: |
-          sed -i "s/{% set version = ".*" %}/{% set version = \"${VERSION}\" %}/" conda/meta.yaml
-          sed -i "s/  sha256: .*/  sha256: ${SHA256}/" conda/meta.yaml
-          sed -i "s/  number: [0-9]*/  number: 0/" conda/meta.yaml
+          sed -i "s|{% set version = \".*\" %}|{% set version = \"${VERSION}\" %}|" conda/meta.yaml
+          sed -i "s|  sha256: .*|  sha256: ${SHA256}|" conda/meta.yaml
+          sed -i "s|  number: [0-9]*|  number: 0|" conda/meta.yaml
 
       - name: Commit and push updated conda/meta.yaml
         run: |
@@ -78,8 +78,8 @@ jobs:
       - name: Build the conda package
         shell: bash -l {0}
         run: |
+          PACKAGE_PATH=$(conda build conda/ -c conda-forge -c bioconda --output)
           conda build conda/ -c conda-forge -c bioconda --no-anaconda-upload
-          PACKAGE_PATH=$(conda build conda/ -c conda-forge --output)
           echo "PACKAGE_PATH=${PACKAGE_PATH}" >> "$GITHUB_ENV"
 
       - name: Upload to Anaconda
