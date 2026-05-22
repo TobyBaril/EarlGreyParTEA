@@ -68,7 +68,7 @@ jobs:
       - name: Install build tools
         shell: bash -l {0}
         run: |
-          conda install -y -c conda-forge conda-build anaconda-client
+          conda install -y -n base -c conda-forge conda-build anaconda-client
 
       - name: Lint the conda recipe
         shell: bash -l {0}
