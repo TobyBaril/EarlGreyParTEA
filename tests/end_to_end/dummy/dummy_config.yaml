@@ -1,11 +1,7 @@
 genome:
   genome1: tests/end_to_end/dummy/dummy.fasta
-  genome2: tests/end_to_end/dummy/dummy.fasta
-  genome3: tests/end_to_end/dummy/dummy.fasta
 species:
   - genome1
-  - genome2
-  - genome3
 output_dir: test_output
 script_dir: scripts
 pipeline_mode: "full"

@@ -29,6 +29,8 @@ rule repeatmasker_warmup:
     speciesMeta.pm) so that all parallel RepeatMasker jobs can proceed without
     conflict.
     """
+    input:
+        f"{OUTDIR}/.repeatmasker_configuration_done"
     output:
         sentinel=touch(f"{OUTDIR}/.repeatmasker_cache_ready")
     log:
@@ -127,15 +129,16 @@ rule prep_genome:
         rm -f {output.gen_prep}.orig
         cp {input.genome} {output.gen_prep}.orig
         gzip -c {output.gen_prep}.orig > {output.backup}
-        
+
         # Process genome
         sed '/>/ s/[[:space:]].*//g; /^$/d' {output.gen_prep}.orig > {output.gen_prep}.tmp
-        {params.script_dir}/headSwap.sh -i {output.gen_prep}.tmp -o {output.gen_prep}
-        rm -f {output.gen_prep}.tmp {output.gen_prep}.orig
-        
+        #{params.script_dir}/headSwap.sh -i {output.gen_prep}.tmp -o {output.gen_prep}
+        #rm -f {output.gen_prep}.tmp {output.gen_prep}.orig
+        cp {output.gen_prep}.tmp {output.gen_prep}
+
         # Move dictionary file
         mv {output.gen_prep}.tmp.dict {output.gen_dict}
-        
+
         # Replace ambiguous nucleotides
         sed -i.bak '/^>/! s/[DVHBPE]/N/g' {output.gen_prep}
         rm -f {output.gen_prep}.bak
@@ -223,10 +226,10 @@ rule extract_repeatmasker_library:
         else
             libpath="$(which RepeatMasker | sed 's|/[^/]*$||g')/Libraries/famdb/"
         fi
-        
+
         # Create output directory
         mkdir -p {params.outdir}
-        
+
         # Extract RepeatMasker library for specified species/clade
         famdb.py -i $libpath families -f fasta_name --include-class-in-name -a -d --curated {params.repspec} > {output.replib}
         """
@@ -359,4 +362,3 @@ rule testrainer:
 
         mv {output.strained}.bak {output.summary}
         """
-
