@@ -3,7 +3,7 @@ import os
 
 sys.path.append(os.path.dirname(workflow.snakefile))
 from scripts.on_start_functions import (
-    running_tea, 
+    running_tea,
     validate_parameters,
     make_directories,
 )
@@ -12,7 +12,7 @@ from scripts.generate_dag import generate_dag
 
 # Apply at parse time
 config = validate_parameters(
-    config, 
+    config,
     outfile = os.path.join(config["output_dir"], "validated_config.yaml")
     )
 
@@ -49,6 +49,8 @@ GENERATE_DAG = config.get("generate_dag", True)  # Generate DAG by default
 DAG_FORMAT = config.get("dag_format", "svg")  # svg, png, or pdf
 
 # Include rules based on pipeline mode
+# TODO: see to what extent initial configuration needs to be included
+include: "rules/lib_configure.smk"
 # lib_construct.smk always included (for prep_genome rule needed by annotation)
 include: "rules/lib_construct.smk"
 
@@ -75,7 +77,7 @@ onstart:
 
     # Directories are created by individual rules as needed
     # make_directories is not needed for pangenome pipeline
-    
+
     # Generate DAG visualization
     if GENERATE_DAG:
         dag_dir = os.path.join(OUTDIR, "workflow_visualization")
