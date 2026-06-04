@@ -1,0 +1,4 @@
+channels:
+  - conda-forge
+dependencies:
+  - conda-forge::repeatmasker=4.2.3
