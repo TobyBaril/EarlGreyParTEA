@@ -132,9 +132,8 @@ rule prep_genome:
 
         # Process genome
         sed '/>/ s/[[:space:]].*//g; /^$/d' {output.gen_prep}.orig > {output.gen_prep}.tmp
-        #{params.script_dir}/headSwap.sh -i {output.gen_prep}.tmp -o {output.gen_prep}
-        #rm -f {output.gen_prep}.tmp {output.gen_prep}.orig
-        cp {output.gen_prep}.tmp {output.gen_prep}
+        {params.script_dir}/headSwap.sh -i {output.gen_prep}.tmp -o {output.gen_prep}
+        rm -f {output.gen_prep}.tmp {output.gen_prep}.orig
 
         # Move dictionary file
         mv {output.gen_prep}.tmp.dict {output.gen_dict}
