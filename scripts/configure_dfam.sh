@@ -9,7 +9,7 @@ cd "$FAMDB_DIR"
 
 echo "Downloading Dfam partitions..."
 curl -o 'dfam39_full.#1.h5.gz' \
-  'https://dfam.org/releases/current/families/FamDB/dfam39_full.[0-16].h5.gz'
+  'https://dfam.org/releases/Dfam_3.9/families/FamDB/dfam39_full.[0-16].h5.gz'
 
 echo "Decompressing..."
 gunzip -f *.gz
