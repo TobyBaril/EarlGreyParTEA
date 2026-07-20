@@ -536,7 +536,7 @@ def generate_dfam39_config_script(library_path, rm_path):
     cd {library_path}/
 
     # Download partitions (modify the range [0-16] as needed)
-    curl -o 'dfam39_full.#1.h5.gz' 'https://dfam.org/releases/current/families/FamDB/dfam39_full.[0-16].h5.gz'
+    curl -o 'dfam39_full.#1.h5.gz' 'https://dfam.org/releases/Dfam_3.9/families/FamDB/dfam39_full.[0-16].h5.gz'
 
     # Decompress files
     gunzip *.gz
