@@ -381,7 +381,7 @@ When EarlGrey is first installed, only Dfam partition 0 is included. For compreh
 cd $CONDA_PREFIX/share/RepeatMasker/Libraries/famdb/
 
 # Download all partitions (0-16)
-curl -o 'dfam39_full.#1.h5.gz' 'https://dfam.org/releases/current/families/FamDB/dfam39_full.[0-16].h5.gz'
+curl -o 'dfam39_full.#1.h5.gz' '[https://dfam.org/releases/Dfam_3.9/families/FamDB/dfam39_full.[0-16].h5.gz'
 
 # Decompress
 gunzip *.gz
