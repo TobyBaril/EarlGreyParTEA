@@ -2576,3 +2576,294 @@ earlGreyParTEA -c <your_config_skip_clust.yaml> --dry-run 2>&1 \
   | grep "split_chimeras"
 # → no output expected (rule is conditionally defined only when skip_clustering: false)
 ```
+
+## Release v0.1.9 Feature Updates
+
+### LSF cluster submission via `--lsf` (Experimental)
+
+**Background:** A user request to support LSF (IBM Spectrum LSF / Platform LSF) cluster environments in addition to SLURM. LSF users at HPC centres cannot use the `--slurm` mode, leaving them with only the local execution path. The implementation follows the same pattern as the existing SLURM integration: each Snakemake rule is submitted as an individual cluster job, with CPUs, memory, and wall-time derived from the rule's existing `resources:` block.
+
+---
+
+#### Approach: community LSF executor plugin
+
+The implementation uses `snakemake-executor-plugin-lsf`, activated via `--executor lsf`. This is a community-maintained plugin (author: Brian Fulton-Howard) available from the Snakemake plugin catalog. It is not part of the official Snakemake organisation, which is why the feature is flagged as **experimental** throughout.
+
+Resource mapping from rule `resources:` block to `bsub` flags:
+- `threads` → `-n` (number of cores per job)
+- `mem_mb` → `-R rusage[mem=<mem_mb/threads>]` (per-core memory by default; set `SNAKEMAKE_LSF_MEMFMT=perjob` for per-job total)
+- `runtime` → `-W <minutes>` (wall-time limit)
+- `lsf_queue` → `-q` (queue/partition)
+- `lsf_project` → `-P` (project string)
+- `lsf_extra` → appended verbatim to the `bsub` command
+
+No changes to any rule's `resources:` block are required — the same declarations used for SLURM are reused directly.
+
+---
+
+#### New CLI flags (all three entry points)
+
+| Flag | Description |
+|------|-------------|
+| `--lsf` | Enable LSF submission mode |
+| `--lsf-queue QUEUE` | LSF queue (required; can also be set as `lsf_queue:` in config) |
+| `--lsf-jobs N` | Max concurrent LSF jobs (default: genomes × 3, capped at 200) |
+| `--lsf-project PROJ` | LSF project string (optional) |
+| `--lsf-extra "FLAGS"` | Extra raw `bsub` flags (e.g. `"-R 'select[type==X86_64]'"`) |
+
+`--slurm` and `--lsf` are mutually exclusive. Using both simultaneously prints an error and exits.
+
+---
+
+#### Snakemake invocation in LSF mode
+
+```bash
+DEFAULT_RESOURCES=("lsf_queue=$LSF_QUEUE")
+[ -n "$LSF_PROJECT" ] && DEFAULT_RESOURCES+=("lsf_project=$LSF_PROJECT")
+[ -n "$LSF_EXTRA" ]   && DEFAULT_RESOURCES+=("lsf_extra=$LSF_EXTRA")
+
+snakemake \
+    --snakefile "$SNAKEFILE" \
+    --configfile "$CONFIG" \
+    --config lsf_mode=true \
+    --executor lsf \
+    --default-resources "${DEFAULT_RESOURCES[@]}" \
+    --jobs "$LSF_JOBS" \
+    --cores "$THREADS" \
+    --latency-wait 60 \
+    --retries 1 \
+    $DRY_RUN $UNLOCK $RERUN
+```
+
+Key differences from SLURM invocation:
+- `--executor lsf` instead of `--executor slurm`
+- `--config lsf_mode=true` instead of `slurm_mode=true`
+- Default resources use `lsf_queue`, `lsf_project`, `lsf_extra` instead of `slurm_partition`, `slurm_account`, `slurm_extra`
+
+---
+
+#### Thread lambda modification
+
+The per-genome thread lambdas in `rules/lib_construct.smk`, `rules/annotate.smk`, and `rules/busco_phylo.smk` were already updated for SLURM mode with `config.get("slurm_mode", False)`. The condition is extended to also check `lsf_mode`:
+
+```python
+# Before
+if config.get("slurm_mode", False)
+
+# After
+if config.get("slurm_mode", False) or config.get("lsf_mode", False)
+```
+
+This ensures each job gets the full `-t` thread count in LSF mode rather than the divided-across-genomes value used in local mode.
+
+**Rules modified:** `repeatmasker`, `repeatmasker_custom`, `repeatmodeler`, `testrainer` (in `lib_construct.smk`); `repeatmasker_annotation` ×2, `heliano_detection`, merge-area rules (in `annotate.smk`); `run_busco` (in `busco_phylo.smk`).
+
+---
+
+#### Memory note: per-core vs per-job
+
+`snakemake-executor-plugin-lsf` divides `mem_mb` by `threads` to produce a per-core memory request by default. Most LSF clusters expect per-core values in `-R rusage[mem=...]`. Users whose cluster accepts per-job totals can override with:
+
+```bash
+export SNAKEMAKE_LSF_MEMFMT=perjob
+```
+
+This is documented in the README and printed as part of the experimental warning at runtime.
+
+---
+
+#### Config additions
+
+Three new optional keys added to `config/config.yaml` and all three `generate_config.py` templates. They are only used when `--lsf` is passed:
+
+```yaml
+# LSF cluster settings (only used with --lsf flag) [EXPERIMENTAL]
+lsf_queue: ""         # queue to submit to (required when using --lsf; can be set here instead of --lsf-queue)
+lsf_project: ""       # project string (leave empty if not required)
+lsf_extra: ""         # any extra bsub flags, e.g. "-R 'select[type==X86_64]'"
+```
+
+Three silent defaults added to `validate_parameters()` in `scripts/on_start_functions.py`:
+```python
+'lsf_queue':   ("", None),
+'lsf_project': ("", None),
+'lsf_extra':   ("", None),
+```
+
+---
+
+#### Inline heredoc fix in AnnotationOnly and LibConstruct wrappers
+
+During implementation it was discovered that the inline `generate_example_config()` heredocs in `earlGreyParTEA_AnnotationOnly` and `earlGreyParTEA_LibConstruct` were missing the SLURM block entirely (the SLURM block had been added to the main `earlGreyParTEA` wrapper but not propagated to the other two). Both wrappers now include both a SLURM block and an LSF block in their heredoc templates, matching the main wrapper and the `generate_config.py` templates.
+
+---
+
+#### Files changed
+
+- `conda/meta.yaml` — added `snakemake-executor-plugin-lsf` as a run dependency alongside `snakemake-executor-plugin-slurm`
+- `earlGreyParTEA` — added `--lsf`, `--lsf-queue`, `--lsf-jobs`, `--lsf-project`, `--lsf-extra` flags; mutual exclusion guard; `elif $LSF` build block; LSF block added to inline heredoc
+- `earlGreyParTEA_AnnotationOnly` — same LSF changes + SLURM block added to inline heredoc (previously missing)
+- `earlGreyParTEA_LibConstruct` — same LSF changes + SLURM block added to inline heredoc (previously missing)
+- `config/config.yaml` — LSF block added
+- `scripts/generate_config.py` — LSF block added to `FULL_TEMPLATE`, `LIBCONSTRUCT_TEMPLATE`, `ANNOTATE_TEMPLATE`
+- `scripts/on_start_functions.py` — three LSF defaults added to `validate_parameters()`
+- `rules/lib_construct.smk` — thread lambdas updated to check `lsf_mode` (4 rules)
+- `rules/annotate.smk` — thread lambdas updated to check `lsf_mode` (4 rules)
+- `rules/busco_phylo.smk` — thread lambda updated to check `lsf_mode` (1 rule)
+- `README.md` — new `## 🖥️ LSF Cluster Submission (Experimental)` section; LSF feature bullet added (chronological); `## Requirements` updated with LSF plugin entry; LSF entry added to TOC
+
+---
+
+### Verification checklist for v0.1.9
+
+> All items require an LSF cluster to fully verify. Structural and unit-level checks can be done locally.
+
+- [ ] `--lsf --lsf-queue myqueue` produces the expected Snakemake invocation with `--executor lsf` (check via `--dry-run`)
+- [ ] `--slurm` and `--lsf` together print error and exit with non-zero status
+- [ ] `--generate-config` output from all three wrappers includes both `slurm_partition`, `slurm_account`, `slurm_extra` AND `lsf_queue`, `lsf_project`, `lsf_extra` blocks
+- [ ] `validate_parameters()` does not raise on a config with no LSF keys (silent defaults applied)
+- [ ] On a real LSF cluster: submit a small dry run and confirm `bsub` jobs appear in `bjobs` with correct queue, CPUs, and memory
+- [ ] Retry logic: kill a job manually and confirm Snakemake resubmits at 2× memory
+- [ ] `SNAKEMAKE_LSF_MEMFMT=perjob` changes the memory request format as documented
+
+### Commands for local pre-release checks
+
+```bash
+# Confirm mutual exclusion guard triggers correctly
+./earlGreyParTEA --slurm --lsf -c config/config.yaml 2>&1 | grep -i "cannot\|error\|exclusive"
+
+# Dry run with --lsf to inspect Snakemake invocation
+./earlGreyParTEA -c /data/toby/testDIR/test.yaml -t 4 --lsf --lsf-queue testqueue --dry-run 2>&1 | head -40
+
+# Confirm generate-config includes LSF block
+./earlGreyParTEA --generate-config /tmp/test_v019.yaml
+grep -A5 "lsf_queue" /tmp/test_v019.yaml
+
+# Confirm AnnotationOnly and LibConstruct generate-config also include both SLURM and LSF blocks
+./earlGreyParTEA_AnnotationOnly --generate-config /tmp/test_v019_anno.yaml
+grep "slurm_partition\|lsf_queue" /tmp/test_v019_anno.yaml
+
+./earlGreyParTEA_LibConstruct --generate-config /tmp/test_v019_lib.yaml
+grep "slurm_partition\|lsf_queue" /tmp/test_v019_lib.yaml
+```
+
+### Bump version to 0.1.9
+
+- [x] `earlGreyParTEA` — `VERSION="0.1.9"`
+- [x] `earlGreyParTEA_LibConstruct` — `VERSION="0.1.9"`
+- [x] `earlGreyParTEA_AnnotationOnly` — `VERSION="0.1.9"`
+- [x] `conda/meta.yaml` — `{% set version = "0.1.9" %}`
+- [x] `.github/workflows/conda-release.yml` — `default: '0.1.9'`
+- [x] `README.md` — version bump in TOC link; new `## 🆕 Changes in Latest Release (v0.1.9)` section
+
+This is now working as expected. I have a bug with the plots where the bars do not line up with the phylogenetic tree. This needs to be resolved before release. 
+
+
+---
+
+## Release v0.2.0 — Dfam 4.0 / FamDB 3.0.0 / RepeatMasker 4.2.4 compatibility
+
+### Background
+
+EarlGrey 7.3.0 upgraded its toolchain to RepeatMasker 4.2.4, RMBlast 2.17.0, RepeatModeler
+2.0.9, and FamDB 3.0.0 (Dfam 4.0). The most significant structural change is that FamDB is
+now a standalone conda package (`share/famdb-3.0.0/`) rather than embedded inside RepeatMasker's
+`share/RepeatMasker/Libraries/famdb/` directory. RepeatMasker itself is pre-configured by the
+conda post-install hook and points to the standalone famdb via `FAMDB_DIR` in
+`RepeatMaskerConfig.pm`. No `perl ./configure` step is needed by the user.
+
+The Dfam 4.0 HDF5 partition files are now named `dfam40.*.h5` (previously `dfam39_full.*.h5`).
+The species-library BLAST cache directory is now `CONS-Dfam_4.0/` (previously `CONS-Dfam_3.9/`
+or `CONS-Dfam_withRBRM_3.9/`), but the existing dynamic `CONS-*` discovery in the
+`repeatmasker_warmup` rule already handles this without any change.
+
+The new user-facing setup flow is simply: install via conda/mamba, then run
+`download_dfam.py` (an interactive download tool that ships with the `famdb` package) to
+fetch the desired Dfam 4.0 partitions.
+
+### Root causes of breakage
+
+1. **`extract_repeatmasker_library` shell block** — derived famdb path as
+   `share/RepeatMasker/Libraries/famdb/`, which in the new environment contains only
+   `RMRBMeta.embl` / `RMRB_DUP.txt` (not the HDF5 files). The `famdb.py -i $libpath`
+   call would fail or return an empty library.
+
+2. **`validate_parameters` EarlGrey configuration check** — also derived the old path,
+   then checked for `dfam39_full.*.h5` files and the `.earlgrey.config.complete` marker.
+   Both checks would fail in a correctly configured Dfam 4.0 environment, producing a
+   false-positive error and generating a useless `configure_dfam39.sh` script.
+
+3. **`scripts/configure_dfam.sh`** — referenced Dfam 3.9 download URLs, `dfam39_full`
+   filenames, and `perl ./configure`, all of which are obsolete.
+
+### Files changed
+
+**`rules/lib_construct.smk`** — `extract_repeatmasker_library` shell block:
+- Replaced hardcoded path derivation with a two-tier detection:
+  1. Search `$CONDA_PREFIX/share/famdb-*` for a standalone FamDB package (new, Dfam 4.0)
+  2. Fall back to `share/RepeatMasker/Libraries/famdb/` (old, Dfam 3.9)
+- Removed the `export PATH=...` line (famdb.py has been in `bin/` in all versions).
+
+**`scripts/on_start_functions.py`** — EarlGrey configuration check block and helper:
+- Replaced `library_path = rm_path.replace(...)` with the same two-tier `glob` detection.
+- Extended h5 file check to match both `dfam40` and `dfam39_full` filenames.
+- `.earlgrey.config.complete` marker is now a fast-path shortcut only (no longer required).
+- Replaced `generate_dfam39_config_script()` with two new private helpers:
+  - `_print_dfam_setup_instructions(library_path, famdb_shares)` — prints the correct
+    setup instructions for either Dfam 4.0 (`download_dfam.py`) or Dfam 3.9 (curl steps).
+  - `_generate_dfam39_config_script_legacy(library_path)` — generates the legacy shell
+    script for Dfam 3.9 environments only.
+
+**`scripts/configure_dfam.sh`** — rewritten as a reference guide:
+- Describes the new `download_dfam.py` setup flow for Dfam 4.0.
+- Preserves the old Dfam 3.9 manual steps as commented-out legacy notes.
+
+**`conda/meta.yaml`** — version bumped to `0.2.0`; `earlgrey` minimum raised to `>=7.3.0`.
+
+**`earlGreyParTEA`, `earlGreyParTEA_LibConstruct`, `earlGreyParTEA_AnnotationOnly`** —
+`VERSION="0.2.0"`.
+
+**`README.md`** — updated dependency badge, Configure EarlGrey setup section, Changes in
+Latest Release section (v0.2.0 added; v0.1.9 moved to Previous Release).
+
+### What did NOT change
+
+- `repeatmasker_warmup` rule — the `CONS-*` dynamic discovery already matches `CONS-Dfam_4.0`.
+- All RepeatMasker, RepeatModeler, and BuildDatabase invocation flags — unchanged.
+- All Snakemake rule logic, clustering, annotation, saturation, shared/unique, BUSCO modules.
+- Entry-point scripts and `generate_config.py` — contain no famdb-specific logic.
+
+### Backward compatibility
+
+Both old (≤7.2, Dfam 3.9) and new (7.3.0, Dfam 4.0) EarlGrey environments are supported.
+The two-tier path detection falls back to the old embedded path when no `famdb-*` directory
+exists in `share/`. The h5 file check matches either naming convention. The `.earlgrey.config.complete`
+marker (if present from old setups) still triggers the fast-path skip.
+
+### Verification checklist
+
+- [X] With `earlgrey_730_test` active: `earlGreyParTEA_LibConstruct --dry-run` — confirm
+      `[INFO] Found N Dfam partition file(s) in .../famdb-3.0.0/Libraries/famdb` in startup log
+
+```
+conda activate partea_20_test
+earlGreyParTEA_LibConstruct --generate-config my_config.yaml --genome-dir /data/toby/testDIR/drosophila_testSet --output-dir /data/toby/testDIR/
+earlGreyParTEA_LibConstruct -c my_config.yaml --threads 16 --dry-run
+# this errored with: Please ensure EarlGrey (>=7.3.0) is properly installed and Dfam partitions have been downloaded via: download_dfam.py
+download_dfam.py
+# after running this, the dry run works
+```
+
+- [X] `extract_repeatmasker_library` step with `repeatmasker_species: "fungi"` — confirm
+      `famdb.py -i .../famdb-3.0.0/Libraries/famdb/` in rule log
+- [X] `repeatmasker_warmup` with `repeatmasker_species: "fungi"` — confirm
+      `CONS-Dfam_4.0/fungi/` cache built successfully
+
+```
+# modify config to include RepeatMasker run with fungi
+earlGreyParTEA_LibConstruct -c my_config.yaml --threads 16 --dry-run
+earlGreyParTEA_LibConstruct -c my_config.yaml --threads 16
+```
+
+- [X] Full libconstruct run (4 genomes, no `repeatmasker_species`) — no regressions
+

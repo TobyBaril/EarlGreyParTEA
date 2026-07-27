@@ -33,7 +33,7 @@ rule repeatmasker_annotation:
         tbl="{outdir}/{species}_EarlGrey/{species}_RepeatMasker_Against_Custom_Library/{species}.prep.tbl"
     log:
         "{outdir}/{species}_EarlGrey/{species}_RepeatMasker_Against_Custom_Library/{species}.repeatmasker_annotation.log"
-    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
+    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
     resources:
         mem_mb=lambda wildcards, attempt: 16000 * attempt,
         runtime=10080
@@ -56,7 +56,7 @@ rule heliano_detection:
         helitron_gff="{outdir}/{species}_EarlGrey/{species}_heliano/RC.representative.gff"
     log:
         "{outdir}/{species}_EarlGrey/{species}_heliano/{species}.heliano_detection.log"
-    threads: lambda wildcards: max(1, min(workflow.cores, 32)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 32))
+    threads: lambda wildcards: max(1, min(workflow.cores, 32)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 32))
     resources:
         mem_mb=lambda wildcards, attempt: 8000 * attempt,
         runtime=480
@@ -92,7 +92,7 @@ rule merge_repeats:
         summary="{outdir}/{species}_EarlGrey/{species}_mergedRepeats/looseMerge/{species}.filteredRepeats.summary"
     log:
         "{outdir}/{species}_EarlGrey/{species}_mergedRepeats/{species}.merge_repeats.log"
-    threads: lambda wildcards: max(1, min(workflow.cores, 16)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 16))
+    threads: lambda wildcards: max(1, min(workflow.cores, 16)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 16))
     resources:
         mem_mb=lambda wildcards, attempt: 8000 * attempt,
         runtime=240
@@ -179,7 +179,7 @@ rule calculate_divergence:
         div_summary="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}_divergence_summary_table.tsv"
     log:
         "{outdir}/{species}_EarlGrey/{species}_RepeatLandscape/{species}.calculate_divergence.log"
-    threads: lambda wildcards: max(1, min(workflow.cores, 16)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 16))
+    threads: lambda wildcards: max(1, min(workflow.cores, 16)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 16))
     resources:
         mem_mb=lambda wildcards, attempt: 8000 * attempt,
         runtime=480

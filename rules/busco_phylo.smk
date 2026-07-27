@@ -69,7 +69,7 @@ rule run_busco:
         busco_dir=directory("{outdir}/{species}_EarlGrey/{species}_busco"),
     log:
         "{outdir}/{species}_EarlGrey/{species}_busco/{species}.run_busco.log"
-    threads: lambda wildcards: max(1, min(workflow.cores, 16)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 16))
+    threads: lambda wildcards: max(1, min(workflow.cores, 16)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 16))
     resources:
         mem_mb=lambda wildcards, attempt: 16000 * attempt,
         runtime=480,

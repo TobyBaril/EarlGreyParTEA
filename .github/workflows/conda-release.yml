@@ -8,7 +8,7 @@ on:
       version:
         description: 'Version to build (without leading v, e.g. 0.1.4)'
         required: true
-        default: '0.1.8'
+        default: '0.1.9'
 
 jobs:
   conda-build-and-deploy:

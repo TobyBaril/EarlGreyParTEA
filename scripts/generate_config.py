@@ -208,6 +208,11 @@ busco_min_occupancy: 0.5  # Min fraction of species a gene must appear in (0.0-1
 slurm_partition: ""   # partition/queue to submit to (required when using --slurm; can be set here instead of --slurm-partition)
 slurm_account: ""     # account string (leave empty if not required)
 slurm_extra: ""       # any extra sbatch flags, e.g. "--constraint=avx2"
+
+# LSF cluster settings (only used with --lsf flag) [EXPERIMENTAL]
+lsf_queue: ""         # queue to submit to (required when using --lsf; can be set here instead of --lsf-queue)
+lsf_project: ""       # project string (leave empty if not required)
+lsf_extra: ""         # any extra bsub flags, e.g. "-R 'select[type==X86_64]'"
 """
 
 LIBCONSTRUCT_TEMPLATE = """\
@@ -278,6 +283,11 @@ busco_min_occupancy: 0.5
 slurm_partition: ""   # partition/queue to submit to (required when using --slurm; can be set here instead of --slurm-partition)
 slurm_account: ""     # account string (leave empty if not required)
 slurm_extra: ""       # any extra sbatch flags, e.g. "--constraint=avx2"
+
+# LSF cluster settings (only used with --lsf flag) [EXPERIMENTAL]
+lsf_queue: ""         # queue to submit to (required when using --lsf; can be set here instead of --lsf-queue)
+lsf_project: ""       # project string (leave empty if not required)
+lsf_extra: ""         # any extra bsub flags, e.g. "-R 'select[type==X86_64]'"
 """
 
 ANNOTATE_TEMPLATE = """\
@@ -342,6 +352,11 @@ busco_min_occupancy: 0.5  # Min fraction of species a gene must appear in (0.0-1
 slurm_partition: ""   # partition/queue to submit to (required when using --slurm; can be set here instead of --slurm-partition)
 slurm_account: ""     # account string (leave empty if not required)
 slurm_extra: ""       # any extra sbatch flags, e.g. "--constraint=avx2"
+
+# LSF cluster settings (only used with --lsf flag) [EXPERIMENTAL]
+lsf_queue: ""         # queue to submit to (required when using --lsf; can be set here instead of --lsf-queue)
+lsf_project: ""       # project string (leave empty if not required)
+lsf_extra: ""         # any extra bsub flags, e.g. "-R 'select[type==X86_64]'"
 """
 
 TEMPLATES = {
