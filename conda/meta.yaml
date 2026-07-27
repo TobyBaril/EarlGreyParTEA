@@ -8,10 +8,10 @@ package:
 
 source:
   url: https://github.com/TobyBaril/EarlGreyParTEA/archive/refs/tags/v{{ version }}.tar.gz
-  sha256: REPLACE_WITH_RELEASE_TARBALL_SHA256
+  sha256: be01122d6ab284b2c675f392e176c13a074afb6396b92e41b55d3de2fa856e39
 
 build:
-  number: 1
+  number: 2
   noarch: python
   run_exports:
     - {{ pin_subpackage('earlgrey-partea', max_pin="x") }}
