@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 # earlGreyParTEA_LibConstruct - Pangenome TE Analysis Pipeline (Library Construction Mode)
-# Version 0.1.8
+# Version 0.2.0
 # A Snakemake-based multi-genome transposable element library construction pipeline
 
 set -e
 
-VERSION="0.1.8"
+VERSION="0.2.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
@@ -42,6 +42,12 @@ Optional Parameters:
                             as 'slurm_partition:' in the config file)
     --slurm-account ACCT    SLURM account string (optional)
     --slurm-extra "FLAGS"   Additional raw sbatch flags (e.g. "--constraint=avx2")
+    --lsf                   Submit jobs to an LSF cluster via snakemake-executor-plugin-lsf [EXPERIMENTAL]
+    --lsf-jobs N            Max concurrent LSF jobs (default: genomes × 3, capped at 200)
+    --lsf-queue QUEUE       LSF queue to submit to (required with --lsf unless set as 'lsf_queue:'
+                            in the config file)
+    --lsf-project PROJ      LSF project string (optional)
+    --lsf-extra "FLAGS"     Additional raw bsub flags (e.g. "-R 'select[type==X86_64]'")
     -h, --help              Show this help message
 
 Example Usage:
@@ -153,6 +159,16 @@ busco_min_occupancy: 0.5  # Min fraction of species a gene must appear in (0.0-1
 
 # Advanced options (usually not needed)
 # script_dir: "/path/to/earlgrey/scripts"  # Auto-detected if installed via conda/mamba
+
+# SLURM cluster settings (only used with --slurm flag)
+slurm_partition: ""   # partition/queue to submit to (required when using --slurm; can be set here instead of --slurm-partition)
+slurm_account: ""     # account string (leave empty if not required)
+slurm_extra: ""       # any extra sbatch flags, e.g. "--constraint=avx2"
+
+# LSF cluster settings (only used with --lsf flag) [EXPERIMENTAL]
+lsf_queue: ""         # queue to submit to (required when using --lsf; can be set here instead of --lsf-queue)
+lsf_project: ""       # project string (leave empty if not required)
+lsf_extra: ""         # any extra bsub flags, e.g. "-R 'select[type==X86_64]'"
 EOF
     echo "[INFO] Example config file generated: $output_file"
     echo "[INFO] Edit this file with your genome paths and parameters before running"
@@ -176,6 +192,11 @@ SLURM_JOBS=""
 SLURM_PARTITION=""
 SLURM_ACCOUNT=""
 SLURM_EXTRA=""
+LSF=false
+LSF_JOBS=""
+LSF_QUEUE=""
+LSF_PROJECT=""
+LSF_EXTRA=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -243,6 +264,26 @@ while [[ $# -gt 0 ]]; do
             SLURM_EXTRA="$2"
             shift 2
             ;;
+        --lsf)
+            LSF=true
+            shift
+            ;;
+        --lsf-jobs)
+            LSF_JOBS="$2"
+            shift 2
+            ;;
+        --lsf-queue)
+            LSF_QUEUE="$2"
+            shift 2
+            ;;
+        --lsf-project)
+            LSF_PROJECT="$2"
+            shift 2
+            ;;
+        --lsf-extra)
+            LSF_EXTRA="$2"
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -254,6 +295,12 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Mutual exclusion: --slurm and --lsf cannot be used together
+if $SLURM && $LSF; then
+    echo "[ERROR] --slurm and --lsf are mutually exclusive. Choose one cluster system."
+    exit 1
+fi
 
 # Handle --generate-config (with optional --genome-dir / --from-csv / --output-dir)
 if [ -n "$GENERATE_CONFIG" ]; then
@@ -397,6 +444,45 @@ if $SLURM; then
         --executor slurm
         --default-resources "${DEFAULT_RESOURCES[@]}"
         --jobs "$SLURM_JOBS"
+        --cores "$THREADS"
+        --latency-wait 60
+        --retries 1
+    )
+elif $LSF; then
+    # --- LSF mode (EXPERIMENTAL) ---
+    # Fall back to LSF settings from config file if not set via CLI
+    if [ -z "$LSF_QUEUE" ]; then
+        LSF_QUEUE=$(python3 -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg.get('lsf_queue') or '')" 2>/dev/null || echo "")
+    fi
+    if [ -z "$LSF_PROJECT" ]; then
+        LSF_PROJECT=$(python3 -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg.get('lsf_project', ''))" 2>/dev/null || echo "")
+    fi
+    if [ -z "$LSF_EXTRA" ]; then
+        LSF_EXTRA=$(python3 -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(cfg.get('lsf_extra', ''))" 2>/dev/null || echo "")
+    fi
+    if [ -z "$LSF_QUEUE" ]; then
+        echo "[ERROR] --lsf-queue is required when using --lsf (or set 'lsf_queue:' in the config file)"
+        exit 1
+    fi
+    # Default: genomes × 3, capped at 200
+    if [ -z "$LSF_JOBS" ]; then
+        N_GENOMES=$(python3 -c "import yaml; cfg=yaml.safe_load(open('$CONFIG')); print(len(cfg.get('species', cfg.get('genome', {}))))" 2>/dev/null || echo 1)
+        LSF_JOBS=$(( N_GENOMES * 3 ))
+        [ "$LSF_JOBS" -gt 200 ] && LSF_JOBS=200
+    fi
+    DEFAULT_RESOURCES=("lsf_queue=$LSF_QUEUE")
+    [ -n "$LSF_PROJECT" ] && DEFAULT_RESOURCES+=("lsf_project=$LSF_PROJECT")
+    [ -n "$LSF_EXTRA" ]   && DEFAULT_RESOURCES+=("lsf_extra=$LSF_EXTRA")
+    echo "[INFO] LSF mode (EXPERIMENTAL): queue=$LSF_QUEUE jobs=$LSF_JOBS"
+    echo "[WARNING] LSF support is experimental. Please report issues at https://github.com/TobyBaril/EarlGreyParTEA/issues"
+    SNAKEMAKE_ARGS=(
+        snakemake
+        --snakefile "$SNAKEFILE"
+        --configfile "$CONFIG"
+        --config lsf_mode=true
+        --executor lsf
+        --default-resources "${DEFAULT_RESOURCES[@]}"
+        --jobs "$LSF_JOBS"
         --cores "$THREADS"
         --latency-wait 60
         --retries 1

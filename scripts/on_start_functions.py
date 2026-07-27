@@ -191,6 +191,12 @@ def validate_parameters(config, outfile = None):
         'busco_lineage': ("", None),
         'busco_prefix': ("busco", None),
         'busco_min_occupancy': (0.5, None),
+        'slurm_partition': ("", None),
+        'slurm_account': ("", None),
+        'slurm_extra': ("", None),
+        'lsf_queue': ("", None),
+        'lsf_project': ("", None),
+        'lsf_extra': ("", None),
     }
 
     msg_header("Parameter values")
@@ -422,44 +428,59 @@ def validate_parameters(config, outfile = None):
     # EarlGrey configuration check
     # --------------------------------------------------
     msg_header("EarlGrey configuration check")
-    
+
     try:
-        # Get RepeatMasker path
-        import subprocess
-        rm_result = subprocess.run(["which", "RepeatMasker"], 
-                                  capture_output=True, text=True, check=True)
+        import glob as _glob
+        # Locate RepeatMasker and derive conda prefix
+        rm_result = subprocess.run(["which", "RepeatMasker"],
+                                   capture_output=True, text=True, check=True)
         rm_path = rm_result.stdout.strip()
-        library_path = rm_path.replace("/bin/RepeatMasker", "/share/RepeatMasker/Libraries/famdb")
-        
+        conda_prefix_rm = rm_path.replace("/bin/RepeatMasker", "")
+
+        # Locate famdb directory — supports both:
+        #   FamDB 3.0.0+ standalone (share/famdb-*/Libraries/famdb/) — Dfam 4.0+
+        #   FamDB < 3.0.0 embedded  (share/RepeatMasker/Libraries/famdb/) — Dfam 3.9
+        famdb_shares = sorted(_glob.glob(
+            os.path.join(conda_prefix_rm, "share", "famdb-*")
+        ))
+        if famdb_shares:
+            library_path = os.path.join(famdb_shares[-1], "Libraries", "famdb")
+        else:
+            library_path = os.path.join(
+                conda_prefix_rm, "share", "RepeatMasker", "Libraries", "famdb"
+            )
+
         if not os.path.isdir(library_path):
-            msg_error(f"RepeatMasker famdb directory not found: {library_path}\nPlease ensure RepeatMasker is properly installed.")
-        
-        # Check for configuration completion marker
+            msg_error(
+                f"Dfam famdb directory not found: {library_path}\n"
+                "Please ensure EarlGrey (>=7.3.0) is properly installed and "
+                "Dfam partitions have been downloaded via: download_dfam.py"
+            )
+
+        # Fast-path: legacy completion marker (written by configure_dfam.sh in <=7.2 envs)
         complete_marker = os.path.join(library_path, ".earlgrey.config.complete")
-        
-        if not os.path.exists(complete_marker):
-            # Check if library has been configured (should have more than just partition 0)
-            h5_files = [f for f in os.listdir(library_path) if f.endswith('.h5') and 'dfam39_full' in f]
-            
-            if len(h5_files) <= 1:
-                # Generate helpful configuration script
-                generate_dfam39_config_script(library_path, rm_path)
+        if os.path.exists(complete_marker):
+            msg_info("EarlGrey configuration marker found — Dfam library configured")
+        else:
+            # Check for h5 partition files:
+            #   Dfam 4.0 names: dfam40.*.h5
+            #   Dfam 3.9 names: dfam39_full.*.h5
+            h5_files = [
+                f for f in os.listdir(library_path)
+                if f.endswith(".h5") and ("dfam40" in f or "dfam39_full" in f)
+            ]
+            if len(h5_files) < 1:
+                _print_dfam_setup_instructions(library_path, famdb_shares)
                 msg_error(
-                    "\nEarlGrey RepeatMasker libraries not configured!\n"
-                    f"Found only {len(h5_files)} Dfam partition file(s) in {library_path}\n"
-                    "A configuration script has been generated: configure_dfam39.sh\n"
-                    "Edit and then run it to download Dfam partitions and configure RepeatMasker:\n"
-                    "  chmod +x configure_dfam39.sh && ./configure_dfam39.sh"
+                    "\nDfam library partitions not found in:\n"
+                    f"  {library_path}\n"
+                    "Download them using download_dfam.py (see instructions above)."
                 )
             else:
-                msg_warn(f"Found {len(h5_files)} Dfam partition files but no completion marker.")
-                msg_info("If RepeatMasker is configured correctly, create marker with:")
-                msg_info(f"  touch {complete_marker}")
-        else:
-            msg_info("EarlGrey configuration marker found - RepeatMasker libraries configured")
-            
+                msg_info(f"Found {len(h5_files)} Dfam partition file(s) in {library_path}")
+
     except subprocess.CalledProcessError:
-        msg_warn("Could not locate RepeatMasker installation - skipping library check")
+        msg_warn("Could not locate RepeatMasker installation — skipping library check")
     except Exception as e:
         msg_warn(f"Error checking EarlGrey configuration: {e}")
 
@@ -521,49 +542,65 @@ def make_directories(directory, species, RepSpec=None, startCust=None, run_helia
         os.makedirs(os.path.join(outdir, f"{species}_heliano"), exist_ok=True)
     return outdir
 
-def generate_dfam39_config_script(library_path, rm_path):
-    """Generate configuration script for Dfam 3.9"""
+def _print_dfam_setup_instructions(library_path, famdb_shares):
+    """Print Dfam setup instructions appropriate for the detected environment."""
+    print("\n" + "=" * 60)
+    if famdb_shares:
+        # New FamDB 3.0.0+ / Dfam 4.0 — standalone conda package
+        print("Dfam 4.0 library setup required")
+        print("=" * 60)
+        print(
+            "EarlGrey >=7.3.0 uses FamDB 3.0.0 / Dfam 4.0.\n"
+            "RepeatMasker is pre-configured by the conda package — "
+            "no 'perl ./configure' is needed.\n\n"
+            "Download the Dfam 4.0 partitions using the interactive tool:\n\n"
+            "    download_dfam.py\n\n"
+            "This will guide you through selecting which partitions to download\n"
+            "(curated consensus, HMMs, etc.) and write them to:\n"
+            f"    {library_path}\n\n"
+            "After download completes, re-run the pipeline."
+        )
+    else:
+        # Legacy FamDB / Dfam 3.9 — embedded in RepeatMasker
+        print("Dfam 3.9 library setup required")
+        print("=" * 60)
+        script_path = os.path.join(os.getcwd(), "configure_dfam39.sh")
+        print(
+            "Only the minimal Dfam partition 0 is present.\n"
+            "Download the full set (0-16) and reconfigure RepeatMasker:\n\n"
+            f"    cd {library_path}\n"
+            "    curl -o 'dfam39_full.#1.h5.gz' \\\n"
+            "      'https://dfam.org/releases/current/families/FamDB/"
+            "dfam39_full.[0-16].h5.gz'\n"
+            "    gunzip -f *.gz\n\n"
+            f"A script template has been written to: {script_path}"
+        )
+        _generate_dfam39_config_script_legacy(library_path)
+    print("=" * 60 + "\n")
+
+
+def _generate_dfam39_config_script_legacy(library_path):
+    """Write a legacy Dfam 3.9 configuration script for reference."""
     script_path = os.path.join(os.getcwd(), "configure_dfam39.sh")
-    
-    print("WARNING: Earl Grey v6.1.0 has updated to Dfam v3.9.")
-    print("Before using Earl Grey, you MUST download the required partitions from Dfam")
-    print(f"Configuration script generated: {script_path}")
-    
-    script_content = f"""#!/bin/bash
-    # Configuration script for Dfam 3.9
-
-    # Change directory to the famdb library location
-    cd {library_path}/
-
-    # Download partitions (modify the range [0-16] as needed)
-    curl -o 'dfam39_full.#1.h5.gz' 'https://dfam.org/releases/Dfam_3.9/families/FamDB/dfam39_full.[0-16].h5.gz'
-
-    # Decompress files
-    gunzip *.gz
-
-    # Move to RepeatMasker directory
-    cd {rm_path.replace('/bin/RepeatMasker', '/share/RepeatMasker/')}
-
-    # Backup existing files
-    mv {library_path}/min_init.0.h5 {library_path}/min_init.0.h5.bak
-
-    # Reconfigure RepeatMasker
-    perl ./configure \\
-        -libdir {library_path.replace('/famdb', '')} \\
-        -trf_prgm {rm_path.replace('/bin/RepeatMasker', '/bin/trf')} \\
-        -rmblast_dir {rm_path.replace('/bin/RepeatMasker', '/bin')} \\
-        -hmmer_dir {rm_path.replace('/bin/RepeatMasker', '/bin')} \\
-        -abblast_dir {rm_path.replace('/bin/RepeatMasker', '/bin')} \\
-        -crossmatch_dir {rm_path.replace('/bin/RepeatMasker', '/bin')} \\
-        -default_search_engine rmblast
-
-    # Mark configuration as complete
-    touch {library_path}/.earlgrey.config.complete
-    """
-    
-    with open(script_path, 'w') as f:
+    rm_share = library_path.replace("/Libraries/famdb", "")
+    bin_dir = rm_share.replace("/share/RepeatMasker", "/bin")
+    script_content = (
+        "#!/bin/bash\n"
+        "# Legacy Dfam 3.9 configuration script\n"
+        f"cd {library_path}/\n"
+        "curl -o 'dfam39_full.#1.h5.gz' "
+        "'https://dfam.org/releases/current/families/FamDB/dfam39_full.[0-16].h5.gz'\n"
+        "gunzip *.gz\n"
+        f"mv {library_path}/min_init.0.h5 {library_path}/min_init.0.h5.bak\n"
+        f"cd {rm_share}\n"
+        "perl ./configure \\\n"
+        f"    -libdir {library_path.replace('/famdb', '')} \\\n"
+        f"    -trf_prgm {bin_dir}/trf \\\n"
+        f"    -rmblast_dir {bin_dir} \\\n"
+        f"    -hmmer_dir {bin_dir} \\\n"
+        "    -default_search_engine rmblast\n"
+        f"touch {library_path}/.earlgrey.config.complete\n"
+    )
+    with open(script_path, "w") as f:
         f.write(script_content)
-    
-    #os.chmod(script_path, 0o755)
-    print(f"Make the script executable and run: chmod +x {script_path} && ./{script_path}")
 

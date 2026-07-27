@@ -159,7 +159,7 @@ rule repeatmasker:
         masked="{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.prep.masked"
     log:
         "{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.repeatmasker.log"
-    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
+    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
     resources:
         mem_mb=lambda wildcards, attempt: 16000 * attempt,
         runtime=10080
@@ -185,7 +185,7 @@ rule repeatmasker_custom:
         masked="{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.prep.masked"
     log:
         "{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.repeatmasker.log"
-    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
+    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
     resources:
         mem_mb=lambda wildcards, attempt: 16000 * attempt,
         runtime=10080
@@ -216,17 +216,20 @@ rule extract_repeatmasker_library:
     shell:
         """
         exec > {log} 2>&1
-        # Determine RepeatMasker library path
-        if [[ $(which RepeatMasker) == *"bin"* ]]; then
-            libpath="$(which RepeatMasker | sed 's|bin/RepeatMasker|share/RepeatMasker/Libraries/famdb/|')"
-            export PATH=$PATH:"$(which RepeatMasker | sed 's|bin/RepeatMasker|share/RepeatMasker/|g')"
+        # Locate famdb library path — supports both:
+        #   FamDB 3.0.0+ standalone (share/famdb-*/Libraries/famdb/): Dfam 4.0+
+        #   FamDB < 3.0.0 embedded  (share/RepeatMasker/Libraries/famdb/):   Dfam 3.9
+        CONDA_PREFIX_RM=$(which RepeatMasker | sed 's|/bin/RepeatMasker$||')
+        FAMDB_SHARE=$(find "$CONDA_PREFIX_RM/share" -maxdepth 1 -type d -name "famdb-*" 2>/dev/null | sort -V | tail -n 1)
+        if [ -n "$FAMDB_SHARE" ]; then
+            libpath="$FAMDB_SHARE/Libraries/famdb/"
         else
-            libpath="$(which RepeatMasker | sed 's|/[^/]*$||g')/Libraries/famdb/"
+            libpath="$CONDA_PREFIX_RM/share/RepeatMasker/Libraries/famdb/"
         fi
-        
+
         # Create output directory
         mkdir -p {params.outdir}
-        
+
         # Extract RepeatMasker library for specified species/clade
         famdb.py -i $libpath families -f fasta_name --include-class-in-name -a -d --curated {params.repspec} > {output.replib}
         """
@@ -265,7 +268,7 @@ rule repeatmodeler:
         families="{outdir}/{species}_EarlGrey/{species}_Database/{species}-families.fa"
     log:
         "{outdir}/{species}_EarlGrey/{species}_RepeatModeler/{species}.repeatmodeler.log"
-    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
+    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
     resources:
         mem_mb=lambda wildcards, attempt: 32000 * attempt,
         runtime=10080
@@ -322,7 +325,7 @@ rule testrainer:
         summary="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}-families.fa.strained"
     log:
         "{outdir}/{species}_EarlGrey/{species}_strainer/{species}.testrainer.log"
-    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
+    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
     resources:
         mem_mb=lambda wildcards, attempt: config.get("total_memory_mb", 32000 * attempt),
         runtime=10080
