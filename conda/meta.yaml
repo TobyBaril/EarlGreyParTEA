@@ -1,5 +1,5 @@
 {% set name = "earlgrey-partea" %}
-{% set version = "0.2.0" %}
+{% set version = "0.2.1" %}
 
 
 package:
@@ -31,7 +31,6 @@ requirements:
     - numpy
     - biopython
     - pandas
-    - busco >=5.4
     - mafft
     - clipkit
     - fasttree

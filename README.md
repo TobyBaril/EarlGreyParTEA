@@ -74,7 +74,13 @@ ParTEA extends EarlGrey with features designed for multi-genome comparative TE a
 
 ---
 
-## 🆕 Changes in Latest Release (v0.2.0)
+## 🆕 Changes in Latest Release (v0.2.1)
+
+### Resolve RMBlast / BLAST conflicts
+
+BUSCO env is dynamically made when BUSCO is run, so that RMBLAST and BLAST can be installed in separate environments. This resolves the conflict between RMBLAST 2.17.0 and entrez-direct, which is required by BLAST. 
+
+## Previous Release (v0.2.0)
 
 ### Dfam 4.0 / FamDB 3.0.0 / RepeatMasker 4.2.4 compatibility
 
