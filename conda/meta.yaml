@@ -1,17 +1,17 @@
 {% set name = "earlgrey-partea" %}
 {% set version = "0.2.1" %}
 
+
 package:
   name: {{ name|lower }}
   version: {{ version }}
 
 source:
-  path: ..
-  #url: https://github.com/TobyBaril/EarlGreyParTEA/archive/refs/tags/v{{ version }}.tar.gz
-  #sha256: REPLACE_WITH_RELEASE_TARBALL_SHA256
+  url: https://github.com/TobyBaril/EarlGreyParTEA/archive/refs/tags/v{{ version }}.tar.gz
+  sha256: REPLACE_WITH_RELEASE_TARBALL_SHA256
 
 build:
-  number: 0
+  number: 1
   noarch: python
   run_exports:
     - {{ pin_subpackage('earlgrey-partea', max_pin="x") }}
