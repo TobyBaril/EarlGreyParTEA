@@ -2867,3 +2867,6 @@ earlGreyParTEA_LibConstruct -c my_config.yaml --threads 16
 
 - [X] Full libconstruct run (4 genomes, no `repeatmasker_species`) — no regressions
 
+## Release v0.2.1 - Resolve RMBlast / BLAST conflicts
+
+There is currently a conflict where BLAST, needed by BUSCO, cannot be installed with RMBLAST 2.17.0 due to incopmatibilities with the entrez-direct dependency. I have resolved this by removing the BUSCO dependency, and instead adding BUSCO env as a rule specifically for the BUSCO process, so a new env is made and used just for this step. 

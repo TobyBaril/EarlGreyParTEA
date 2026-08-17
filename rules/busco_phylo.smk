@@ -40,6 +40,8 @@ rule fetch_busco_db:
         sentinel=f"{OUTDIR}/buscoPhylo/.busco_db_ready",
     log:
         f"{OUTDIR}/buscoPhylo/fetch_busco_db.log"
+    conda:
+        "envs/busco.yaml"
     params:
         lineage=BUSCO_LINEAGE,
         db_path=f"{OUTDIR}/buscoPhylo/busco_db",
@@ -73,6 +75,8 @@ rule run_busco:
     resources:
         mem_mb=lambda wildcards, attempt: 16000 * attempt,
         runtime=480,
+    conda:
+        "envs/busco.yaml"
     params:
         lineage=BUSCO_LINEAGE,
         busco_prefix=BUSCO_PREFIX,

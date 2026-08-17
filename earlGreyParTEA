@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 # earlGreyParTEA - Pangenome TE Analysis Pipeline (Full Mode)
-# Version 0.2.0
+# Version 0.2.1
 # A Snakemake-based multi-genome transposable element annotation pipeline
 
 set -e
 
-VERSION="0.2.0"
+VERSION="0.2.1"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
@@ -443,6 +443,7 @@ if $SLURM; then
         --cores "$THREADS"
         --latency-wait 60
         --retries 1
+        --use-conda
     )
 elif $LSF; then
     # --- LSF mode (EXPERIMENTAL) ---
@@ -484,10 +485,11 @@ elif $LSF; then
         --cores "$THREADS"
         --latency-wait 60
         --retries 1
+        --use-conda
     )
 else
     # --- Local mode ---
-    SNAKEMAKE_ARGS=(snakemake --snakefile "$SNAKEFILE" --configfile "$CONFIG" --cores "$THREADS" --default-resources "tmpdir='/tmp'")
+    SNAKEMAKE_ARGS=(snakemake --snakefile "$SNAKEFILE" --configfile "$CONFIG" --cores "$THREADS" --use-conda --default-resources "tmpdir='/tmp'")
     if [ -n "$MEMORY" ]; then
         if [ "$MEMORY" -lt 32000 ]; then
             echo "[WARNING] -m ${MEMORY}MB is below the recommended minimum of 32000MB. TEstrainer"
