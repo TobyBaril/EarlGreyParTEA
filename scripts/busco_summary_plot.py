@@ -152,6 +152,7 @@ def _plot(species_order, all_counts, out_pdf, title="BUSCO Completeness Assessme
         fig, (ax_tree, ax_bar) = plt.subplots(
             1, 2, figsize=(13, fig_h),
             gridspec_kw={"width_ratios": [1, 3]},
+            sharey=True,
         )
         ax_tree.set_ylim(-0.5, n - 0.5)
         _draw_cladogram(ax_tree, species_order, tree_path)
@@ -181,6 +182,7 @@ def _plot(species_order, all_counts, out_pdf, title="BUSCO Completeness Assessme
     ax_bar.set_xlabel("% BUSCO groups", fontsize=10)
     ax_bar.set_title(title, fontsize=11, fontweight="bold")
     ax_bar.set_xlim(0, 100)
+    ax_bar.set_ylim(-0.5, n - 0.5) # force exact match with tree axis if present
     ax_bar.spines[["top", "right"]].set_visible(False)
     ax_bar.legend(frameon=False, fontsize=8,
                   bbox_to_anchor=(1.01, 1), loc="upper left", borderaxespad=0)

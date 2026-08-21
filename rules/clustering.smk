@@ -10,7 +10,7 @@ rule cluster_all_species:
         combined_fa=temp("{outdir}/combinedLibraries/combined_all_species.fa")
     log:
         "{outdir}/combinedLibraries/cluster_all_species.log"
-    threads: lambda wildcards: max(1, min(workflow.cores, 32))  # cd-hit: scales 1-32 threads (single job, runs once)
+    threads: lambda wildcards: max(1, min(workflow.cores, 64))  # cd-hit: scales 1-64 threads (single job, runs once)
     resources:
         mem_mb=lambda wildcards, attempt: 32000 * attempt,
         runtime=480

@@ -621,12 +621,14 @@ def _make_plot(species_order, shared_by_class, unique_by_class,
         fig, (ax_tree, ax_bar) = plt.subplots(
             1, 2, figsize=(12, fig_h),
             gridspec_kw={"width_ratios": [1, 3]},
+            sharey=True,
         )
         _draw_cladogram(ax_tree, species_order, tree_path)
         ax_bar.set_yticks(range(len(species_order)))
         ax_bar.set_yticklabels(species_order, fontsize=9)
         _stacked_bar(ax_bar, species_order, shared_by_class, unique_by_class,
                      xlabel, title, value_fmt)
+        ax_bar.set_ylim(-0.5, len(species_order) - 0.5) # force y-limits to match cladogram
     else:
         fig, ax_bar = plt.subplots(figsize=(10, fig_h))
         _stacked_bar(ax_bar, species_order, shared_by_class, unique_by_class,

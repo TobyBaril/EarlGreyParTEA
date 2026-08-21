@@ -20,14 +20,19 @@ elif REPSPEC:
 
 rule repeatmasker_warmup:
     """
-    Pre-build the RepeatMasker general and species-specific library BLAST caches
+    Pre-build the RepeatMasker general and species-specific library caches
     before parallel genome jobs start. On a freshly configured conda environment,
     the caches do not yet exist. Running multiple RepeatMasker processes
     simultaneously causes a race where each tries to write the same cache
     directory and all but one fail. Running a single warmup job first ensures
-    both caches are fully in place (including refineableHash.dat and
-    speciesMeta.pm) so that all parallel RepeatMasker jobs can proceed without
-    conflict.
+    both caches are fully in place so that all parallel RepeatMasker jobs can
+    proceed without conflict.
+
+    RepeatMasker picks the first *writable* directory from a fixed priority
+    list (Libraries/ under the install, then ~/.RepeatMaskerCache, then a
+    throwaway temp dir). Depending on permissions on the shared conda env,
+    it can land in either the install's Libraries/ dir or the user's home
+    cache — so this rule checks both locations rather than assuming one.
     """
     output:
         sentinel=touch(f"{OUTDIR}/.repeatmasker_cache_ready")
@@ -43,53 +48,91 @@ rule repeatmasker_warmup:
         """
         exec > {log} 2>&1
         RM_SHARE=$(which RepeatMasker | sed 's|/bin/RepeatMasker$|/share/RepeatMasker|')
+        CACHE_ROOTS="$RM_SHARE/Libraries $HOME/.RepeatMaskerCache"
 
-        # Warm up the general library cache if not already built
-        if ! find "$RM_SHARE/Libraries" -maxdepth 2 -type d -name "general" 2>/dev/null | grep -q .; then
+        # Find a CONS-* library parent dir (consensus/BLAST-format cache root)
+        # across every candidate cache location.
+        find_cons_parents() {{
+            for root in $CACHE_ROOTS; do
+                find "$root" -maxdepth 1 -type d -name "CONS-*" 2>/dev/null
+            done
+        }}
+
+        # Does a completed species cache exist anywhere? Print its path if so.
+        find_completed_species_dir() {{
+            local species="$1"
+            for parent in $(find_cons_parents); do
+                dir="$parent/$species"
+                if [ -f "$dir/speciesMeta.pm" ] || [ -f "$dir/refineableHash.dat" ]; then
+                    echo "$dir"
+                    return 0
+                fi
+            done
+            return 1
+        }}
+
+        # Any existing (possibly incomplete) species cache dirs, across all roots.
+        find_all_species_dirs() {{
+            local species="$1"
+            for parent in $(find_cons_parents); do
+                dir="$parent/$species"
+                [ -d "$dir" ] && echo "$dir"
+            done
+        }}
+
+        # ---- Warm up the general library cache if not already built, in either root ----
+        GENERAL_FOUND=0
+        for root in $CACHE_ROOTS; do
+            if find "$root" -maxdepth 2 -type d -name "general" 2>/dev/null | grep -q .; then
+                GENERAL_FOUND=1
+                break
+            fi
+        done
+        if [ "$GENERAL_FOUND" -eq 0 ]; then
             echo "Warming up RepeatMasker general library cache..." >&2
             tmp=$(mktemp -d)
             printf '>dummy\\nATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG\\n' > "$tmp/dummy.fa"
-            RepeatMasker -lib "$tmp/dummy.fa" -no_is -pa 1 -dir "$tmp" "$tmp/dummy.fa" > /dev/null 2>&1 || true
+            RepeatMasker -lib "$tmp/dummy.fa" -no_is -pa 1 -dir "$tmp" "$tmp/dummy.fa" || true
             rm -rf "$tmp"
         fi
 
-        # Warm up the species-specific library cache if a species is specified
-        # This prevents a race condition where parallel jobs all try to build
-        # the same species cache (including refineableHash.dat / speciesMeta.pm)
-        # simultaneously, causing all but one to fail.
+        # ---- Warm up the species-specific library cache if a species is specified ----
         if [ -n "{params.rep_spec}" ]; then
             SPECIES_WORD=$(echo "{params.rep_spec}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_')
-            # Dynamically discover the CONS cache parent — its name varies depending on
-            # whether RepBase is included (e.g. CONS-Dfam_withRBRM_3.9 vs CONS-Dfam_3.9).
-            CACHE_PARENT=$(find "$RM_SHARE/Libraries" -maxdepth 1 -type d -name "CONS-*" 2>/dev/null | head -n 1)
-            if [ -z "$CACHE_PARENT" ]; then
-                echo "WARNING: No CONS-* cache directory found under $RM_SHARE/Libraries — skipping species cache check." >&2
+
+            if [ -z "$(find_cons_parents)" ]; then
+                echo "WARNING: No CONS-* cache directory found under any of: $CACHE_ROOTS — skipping species cache check." >&2
                 exit 0
             fi
-            CACHE_DIR="$CACHE_PARENT/$SPECIES_WORD"
 
-            # If the cache directory exists but refineableHash.dat is missing, it is
-            # incomplete (e.g. a previous OOM-killed makeblastdb run). RepeatMasker
-            # considers *.nhr sufficient to skip rebuilding, so we must delete the
-            # incomplete directory to force a fresh build.
-            if [ -d "$CACHE_DIR" ] && [ ! -f "$CACHE_DIR/refineableHash.dat" ]; then
-                echo "Incomplete species cache detected (missing refineableHash.dat). Removing $CACHE_DIR to force rebuild..." >&2
-                rm -rf "$CACHE_DIR"
-            fi
-            # Also remove any stale .working directory left by a previous aborted run.
-            rm -rf "$CACHE_DIR.working" 2>/dev/null || true
+            # Clean up any incomplete species cache dirs (e.g. from an OOM-killed
+            # makeblastdb run) in EITHER location, so a stale half-built dir in
+            # one root doesn't shadow a fresh build attempt.
+            for dir in $(find_all_species_dirs "$SPECIES_WORD"); do
+                if [ ! -f "$dir/speciesMeta.pm" ] && [ ! -f "$dir/refineableHash.dat" ]; then
+                    echo "Incomplete species cache detected. Removing $dir to force rebuild..." >&2
+                    rm -rf "$dir"
+                fi
+                rm -rf "$dir.working" 2>/dev/null || true
+            done
 
-            if [ ! -f "$CACHE_DIR/refineableHash.dat" ]; then
+            EXISTING=$(find_completed_species_dir "$SPECIES_WORD" || true)
+            if [ -n "$EXISTING" ]; then
+                echo "Species cache already present at $EXISTING — skipping build." >&2
+            else
                 echo "Warming up RepeatMasker species library cache for {params.rep_spec}..." >&2
                 tmp=$(mktemp -d)
                 printf '>dummy\\nATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG\\n' > "$tmp/dummy.fa"
-                RepeatMasker -species "{params.rep_spec}" -no_is -pa 1 -dir "$tmp" "$tmp/dummy.fa" > /dev/null 2>&1 || true
+                RepeatMasker -species "{params.rep_spec}" -no_is -pa 1 -dir "$tmp" "$tmp/dummy.fa" || true
                 rm -rf "$tmp"
-                if [ ! -f "$CACHE_DIR/refineableHash.dat" ]; then
-                    echo "ERROR: species cache build failed — refineableHash.dat still missing in $CACHE_DIR" >&2
+
+                BUILT=$(find_completed_species_dir "$SPECIES_WORD" || true)
+                if [ -z "$BUILT" ]; then
+                    echo "ERROR: species cache build failed — no completed cache found for '$SPECIES_WORD' in any of: $CACHE_ROOTS" >&2
+                    echo "Checked for CONS-*/$SPECIES_WORD dirs containing speciesMeta.pm or refineableHash.dat." >&2
                     exit 1
                 fi
-                echo "Species cache built successfully." >&2
+                echo "Species cache built successfully at $BUILT" >&2
             fi
         fi
         """
@@ -159,7 +202,7 @@ rule repeatmasker:
         masked="{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.prep.masked"
     log:
         "{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.repeatmasker.log"
-    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
+    threads: lambda wildcards: max(1, min(workflow.cores, 128)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 128))
     resources:
         mem_mb=lambda wildcards, attempt: 16000 * attempt,
         runtime=10080
@@ -185,7 +228,7 @@ rule repeatmasker_custom:
         masked="{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.prep.masked"
     log:
         "{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.repeatmasker.log"
-    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
+    threads: lambda wildcards: max(1, min(workflow.cores, 128)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 128))
     resources:
         mem_mb=lambda wildcards, attempt: 16000 * attempt,
         runtime=10080
@@ -268,7 +311,7 @@ rule repeatmodeler:
         families="{outdir}/{species}_EarlGrey/{species}_Database/{species}-families.fa"
     log:
         "{outdir}/{species}_EarlGrey/{species}_RepeatModeler/{species}.repeatmodeler.log"
-    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
+    threads: lambda wildcards: max(1, min(workflow.cores, 128)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 128))
     resources:
         mem_mb=lambda wildcards, attempt: 32000 * attempt,
         runtime=10080
@@ -325,7 +368,7 @@ rule testrainer:
         summary="{outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}-families.fa.strained"
     log:
         "{outdir}/{species}_EarlGrey/{species}_strainer/{species}.testrainer.log"
-    threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
+    threads: lambda wildcards: max(1, min(workflow.cores, 128)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 128))
     resources:
         mem_mb=lambda wildcards, attempt: config.get("total_memory_mb", 32000 * attempt),
         runtime=10080

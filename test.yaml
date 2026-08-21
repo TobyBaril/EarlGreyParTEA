@@ -1,0 +1,75 @@
+# EarlGrey Pangenome Pipeline Configuration
+# AnnotationOnly Mode: Annotation with pre-existing TE library
+
+# Input genomes
+genome:
+  genome1: /path/to/genome1.fasta
+  genome2: /path/to/genome2.fasta
+  genome3: /path/to/genome3.fasta
+
+# Species identifiers (must match keys in 'genome' above)
+species:
+  - genome1
+  - genome2
+  - genome3
+
+# Output directory for all results
+output_dir: /path/to/output/directory
+
+# Pipeline mode (do not change for earlGreyParTEA_AnnotationOnly)
+pipeline_mode: "annotate"
+
+# REQUIRED: Path to pre-existing TE library
+annotation_library: "/path/to/your/TE_library.fasta"
+
+# Library construction parameters (not used in annotation mode)
+repeatmasker_species: ""
+custom_library: ""
+iterations: 10
+flank: 1000
+max_consensus_seqs: 20
+min_consensus_seqs: 3
+skip_clustering: false
+clustering_identity: 0.8
+clustering_coverage: 0.8
+clustering_coverage_long: 0.0
+clustering_length_diff: 0.5
+split_chimeras: false
+chimera_overlap_min: 50
+chimera_min_members: 3
+chimera_min_component_span: 0.1
+
+# Output options
+softmask: true          # Generate softmasked genome for each input
+margin: false           # Remove short TE sequences (<100bp)
+run_heliano: true       # Run HELIANO for Helitron detection
+
+# Workflow visualization (requires graphviz/dot installed)
+generate_dag: true      # Generate workflow DAG visualizations
+dag_format: "svg"       # Options: "svg", "png", "pdf"
+
+# ---------------------------------------------------------------------------
+# Optional analysis modules (v0.1.6+)
+# ---------------------------------------------------------------------------
+
+# Shared/unique TE content analysis: requires GFF outputs from annotation
+run_shared_unique: false
+
+# BUSCO-based phylogenomics
+run_busco_phylo: false
+busco_lineage: ""        # REQUIRED if run_busco_phylo: true  (e.g. "fungi_odb10")
+busco_prefix: "busco"   # Prefix for BUSCO run directory names
+busco_min_occupancy: 0.5  # Min fraction of species a gene must appear in (0.0-1.0)
+
+# Advanced options (usually not needed)
+# script_dir: "/path/to/earlgrey/scripts"  # Auto-detected if installed via conda/mamba
+
+# SLURM cluster settings (only used with --slurm flag)
+slurm_partition: ""   # partition/queue to submit to (required when using --slurm; can be set here instead of --slurm-partition)
+slurm_account: ""     # account string (leave empty if not required)
+slurm_extra: ""       # any extra sbatch flags, e.g. "--constraint=avx2"
+
+# LSF cluster settings (only used with --lsf flag) [EXPERIMENTAL]
+lsf_queue: ""         # queue to submit to (required when using --lsf; can be set here instead of --lsf-queue)
+lsf_project: ""       # project string (leave empty if not required)
+lsf_extra: ""         # any extra bsub flags, e.g. "-R 'select[type==X86_64]'"
