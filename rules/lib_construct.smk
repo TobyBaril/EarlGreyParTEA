@@ -313,7 +313,7 @@ rule repeatmodeler:
         "{outdir}/{species}_EarlGrey/{species}_RepeatModeler/{species}.repeatmodeler.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 128)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 128))
     resources:
-        mem_mb=lambda wildcards, attempt: 32000 * attempt,
+        mem_mb=lambda wildcards, attempt: 48000 * attempt,
         runtime=10080
     params:
         db_dir="{outdir}/{species}_EarlGrey/{species}_Database",
@@ -370,7 +370,7 @@ rule testrainer:
         "{outdir}/{species}_EarlGrey/{species}_strainer/{species}.testrainer.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 128)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 128))
     resources:
-        mem_mb=lambda wildcards, attempt: config.get("total_memory_mb", 32000 * attempt),
+        mem_mb=lambda wildcards, attempt: config.get("total_memory_mb", 48000 * attempt),
         runtime=10080
     params:
         outdir=OUTDIR,
