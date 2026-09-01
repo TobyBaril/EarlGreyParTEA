@@ -58,7 +58,7 @@ rule heliano_detection:
         "{outdir}/{species}_EarlGrey/{species}_heliano/{species}.heliano_detection.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
     resources:
-        mem_mb=lambda wildcards, attempt: 8000 * attempt,
+        mem_mb=lambda wildcards, attempt: 16000 * attempt,
         runtime=480
     params:
         heliano_dir="{outdir}/{species}_EarlGrey/{species}_heliano"

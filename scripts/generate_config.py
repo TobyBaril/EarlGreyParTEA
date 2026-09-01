@@ -303,12 +303,11 @@ output_dir: {output_dir}
 # Pipeline mode (do not change for earlGreyParTEA_AnnotationOnly)
 pipeline_mode: "annotate"
 
-# REQUIRED: Path to pre-existing TE library
-annotation_library: "/path/to/your/TE_library.fasta"
+# Path to pre-existing TE library for annotation, or set repeatmasker_species to extract from Dfam
+repeatmasker_species: ""  # e.g., "arthropoda" — extracts Dfam library for this clade
+custom_library: ""        # path to your own TE library fasta
 
-# Library construction parameters (not used in annotation mode)
-repeatmasker_species: ""
-custom_library: ""
+# Annotation parameters
 iterations: 10
 flank: 1000
 max_consensus_seqs: 20
@@ -402,7 +401,7 @@ def main():
     if args.output_dir is None:
         print("[INFO] Remember to set 'output_dir' in the config before running")
     if args.mode == 'annotate':
-        print("[INFO] IMPORTANT: Set 'annotation_library' to your TE library path before running")
+        print("[INFO] IMPORTANT: Set 'custom_library' to your TE library path, or set 'repeatmasker_species' to extract from Dfam")
 
 
 if __name__ == '__main__':
