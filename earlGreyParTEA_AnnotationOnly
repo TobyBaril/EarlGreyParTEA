@@ -67,8 +67,8 @@ Example Usage:
     earlGreyParTEA_AnnotationOnly -c my_config.yaml -t 16 --dry-run
 
 Important:
-    You MUST specify annotation_library in your config.yaml
-    This should point to a TE library in fasta format.
+    You MUST specify custom_library or repeatmasker_species in your config.yaml
+    custom_library should point to a TE library in fasta format.
 
 Documentation:
     https://github.com/TobyBaril/EarlGreyParTEA
@@ -104,12 +104,9 @@ output_dir: /path/to/output/directory
 # Pipeline mode (do not change for earlGreyParTEA_AnnotationOnly)
 pipeline_mode: "annotate"
 
-# REQUIRED: Path to pre-existing TE library
-annotation_library: "/path/to/your/TE_library.fasta"
-
-# Library construction parameters (not used in annotation mode)
-repeatmasker_species: ""
-custom_library: ""
+# Path to pre-existing TE library for annotation (or set repeatmasker_species to extract from Dfam)
+repeatmasker_species: ""  # e.g., "arthropoda" — extracts Dfam library for this clade
+custom_library: ""        # path to your own TE library fasta
 iterations: 10
 flank: 1000
 max_consensus_seqs: 20
@@ -160,7 +157,7 @@ lsf_project: ""       # project string (leave empty if not required)
 lsf_extra: ""         # any extra bsub flags, e.g. "-R 'select[type==X86_64]'"
 EOF
     echo "[INFO] Example config file generated: $output_file"
-    echo "[INFO] IMPORTANT: Edit 'annotation_library' parameter with path to your TE library!"
+    echo "[INFO] IMPORTANT: Edit 'custom_library' or 'repeatmasker_species' in the config file!"
     echo "[INFO] Edit other fields with your genome paths and parameters before running"
     exit 0
 }

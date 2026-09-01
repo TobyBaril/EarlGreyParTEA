@@ -40,7 +40,7 @@ rule repeatmasker_warmup:
         f"{OUTDIR}/.repeatmasker_warmup.log"
     threads: 1
     resources:
-        mem_mb=32000,
+        mem_mb=6000,
         runtime=120
     params:
         rep_spec=REPSPEC
@@ -204,7 +204,7 @@ rule repeatmasker:
         "{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.repeatmasker.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 128)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 128))
     resources:
-        mem_mb=lambda wildcards, attempt: 16000 * attempt,
+        mem_mb=lambda wildcards, attempt: 32000 * attempt,
         runtime=10080
     params:
         outdir="{outdir}/{species}_EarlGrey/{species}_RepeatMasker",
@@ -230,7 +230,7 @@ rule repeatmasker_custom:
         "{outdir}/{species}_EarlGrey/{species}_RepeatMasker/{species}.repeatmasker.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 128)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 128))
     resources:
-        mem_mb=lambda wildcards, attempt: 16000 * attempt,
+        mem_mb=lambda wildcards, attempt: 32000 * attempt,
         runtime=10080
     params:
         outdir="{outdir}/{species}_EarlGrey/{species}_RepeatMasker",
@@ -313,7 +313,7 @@ rule repeatmodeler:
         "{outdir}/{species}_EarlGrey/{species}_RepeatModeler/{species}.repeatmodeler.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 128)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 128))
     resources:
-        mem_mb=lambda wildcards, attempt: 48000 * attempt,
+        mem_mb=lambda wildcards, attempt: 64000 * attempt,
         runtime=10080
     params:
         db_dir="{outdir}/{species}_EarlGrey/{species}_Database",
@@ -370,7 +370,7 @@ rule testrainer:
         "{outdir}/{species}_EarlGrey/{species}_strainer/{species}.testrainer.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 128)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 128))
     resources:
-        mem_mb=lambda wildcards, attempt: config.get("total_memory_mb", 48000 * attempt),
+        mem_mb=lambda wildcards, attempt: config.get("total_memory_mb", 64000 * attempt),
         runtime=10080
     params:
         outdir=OUTDIR,

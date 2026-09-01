@@ -35,7 +35,7 @@ rule repeatmasker_annotation:
         "{outdir}/{species}_EarlGrey/{species}_RepeatMasker_Against_Custom_Library/{species}.repeatmasker_annotation.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 128)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 128))
     resources:
-        mem_mb=lambda wildcards, attempt: 16000 * attempt,
+        mem_mb=lambda wildcards, attempt: 32000 * attempt,
         runtime=10080
     params:
         outdir="{outdir}/{species}_EarlGrey/{species}_RepeatMasker_Against_Custom_Library",

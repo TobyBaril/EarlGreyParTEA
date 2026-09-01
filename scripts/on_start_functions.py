@@ -211,6 +211,21 @@ def validate_parameters(config, outfile = None):
                 msg_info(message_template.format(config[param]))
 
     # --------------------------------------------------
+    # Normalise library keys: annotation_library is a legacy alias for
+    # custom_library in annotate mode. Silently promote it so validation
+    # and the Snakefile both see a populated custom_library.
+    # --------------------------------------------------
+    if config.get('pipeline_mode', 'full') == 'annotate':
+        if config.get('annotation_library') and not config.get('custom_library'):
+            config['custom_library'] = config['annotation_library']
+        elif config.get('annotation_library') and config.get('custom_library'):
+            msg_warn(
+                "Both 'annotation_library' and 'custom_library' are set in annotate mode. "
+                f"'custom_library' ({os.path.basename(config['custom_library'])}) will be used; "
+                "'annotation_library' is ignored."
+            )
+
+    # --------------------------------------------------
     # Verbose user messages 
     # --------------------------------------------------
     msg_header("Pipeline behaviour")
@@ -219,14 +234,16 @@ def validate_parameters(config, outfile = None):
     repspec = config.get('repeatmasker_species', "")
     custom_lib = config.get('custom_library', "")
     
-    if repspec and custom_lib:
-        msg_error("Both RepeatMasker species and custom library specified - only one can be used at a time")
-    elif repspec:
-        msg_info(f"Running with initial RepeatMasker masking using species: {repspec}")
-    elif custom_lib:
-        msg_info(f"Running with initial RepeatMasker masking using custom library: {os.path.basename(custom_lib)}")
-    else:
-        msg_info("RepeatMasker species/library not specified, running Earl Grey without an initial mask with known repeats")
+    pipeline_mode_for_rm = config.get('pipeline_mode', 'full')
+    if pipeline_mode_for_rm != 'annotate':
+        if repspec and custom_lib:
+            msg_error("Both 'repeatmasker_species' and 'custom_library' specified — only one can be used for initial masking at a time")
+        elif repspec:
+            msg_info(f"Running with initial RepeatMasker masking using species: {repspec}")
+        elif custom_lib:
+            msg_info(f"Running with initial RepeatMasker masking using custom library: {os.path.basename(custom_lib)}")
+        else:
+            msg_info("RepeatMasker species/library not specified, running Earl Grey without an initial mask with known repeats")
 
     # Clustering
     skip_clustering = config.get('skip_clustering', False)
@@ -252,6 +269,12 @@ def validate_parameters(config, outfile = None):
         msg_warn("Clustering may affect subfamilies and create chimeras")
         # Chimera splitting
         if config.get('split_chimeras', False):
+            if config.get('pipeline_mode', 'full') == 'annotate':
+                msg_error(
+                    "split_chimeras=true is not compatible with pipeline_mode='annotate'. "
+                    "Chimera splitting requires a clustered library (.clstr file) produced "
+                    "by the library construction step, which is not run in annotate mode."
+                )
             ovlp = config.get('chimera_overlap_min', 50)
             min_mem = config.get('chimera_min_members', 3)
             span = config.get('chimera_min_component_span', 0.1)
@@ -301,18 +324,35 @@ def validate_parameters(config, outfile = None):
     if pipeline_mode not in ['full', 'libconstruct', 'annotate']:
         msg_error(f"Invalid pipeline_mode '{pipeline_mode}'. Must be 'full', 'libconstruct', or 'annotate'")
     
+    annotation_lib_top = config.get('annotation_library', '')
+    if annotation_lib_top and pipeline_mode in ('full', 'libconstruct'):
+        msg_warn(
+            f"'annotation_library' is a legacy key with no effect in pipeline_mode='{pipeline_mode}'. "
+            "Use 'custom_library' instead."
+        )
+
     if pipeline_mode == 'full':
         msg_info("Pipeline mode: FULL - Complete library construction and annotation")
     elif pipeline_mode == 'libconstruct':
         msg_info("Pipeline mode: LIBCONSTRUCT - Library construction only (stops after clustering)")
     elif pipeline_mode == 'annotate':
-        msg_info("Pipeline mode: ANNOTATE - Annotation only with user-supplied library")
-        annotation_lib = config.get('annotation_library', '')
-        if not annotation_lib:
-            msg_error("Pipeline mode 'annotate' requires 'annotation_library' parameter specifying path to library fasta")
-        if not Path(annotation_lib).exists():
-            msg_error(f"Annotation library not found: {annotation_lib}")
-        msg_info(f"Using annotation library: {os.path.basename(annotation_lib)}")
+        msg_info("Pipeline mode: ANNOTATE - Annotation only with user-supplied library or RepeatMasker species term")
+        annotation_lib = config.get('custom_library', '') or config.get('annotation_library', '')
+        repeatmasker_species = config.get('repeatmasker_species', '')
+        if not annotation_lib and not repeatmasker_species:
+            msg_error(
+                "Pipeline mode 'annotate' requires either 'custom_library' "
+                "(path to library fasta) or 'repeatmasker_species' (RepeatMasker species/clade term)"
+            )
+        if annotation_lib:
+            if not Path(annotation_lib).exists():
+                msg_error(f"Annotation library not found: {annotation_lib}")
+            if repeatmasker_species:
+                msg_info(f"Using annotation library: {os.path.basename(annotation_lib)} combined with RepeatMasker species term: {repeatmasker_species}")
+            else:
+                msg_info(f"Using annotation library: {os.path.basename(annotation_lib)}")
+        else:
+            msg_info(f"Using RepeatMasker species term for annotation library extraction: {repeatmasker_species}")
 
     # Optional module: shared/unique TE content
     run_shared_unique = config.get('run_shared_unique', False)

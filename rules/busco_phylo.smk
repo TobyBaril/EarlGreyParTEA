@@ -318,7 +318,7 @@ rule run_fasttree:
         f"{OUTDIR}/buscoPhylo/fasttree.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 8))
     resources:
-        mem_mb=lambda wildcards, attempt: 16000 * attempt,
+        mem_mb=lambda wildcards, attempt: 64000 * attempt,
         runtime=240,
     shell:
         """
