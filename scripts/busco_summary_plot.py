@@ -179,6 +179,7 @@ def _plot(species_order, all_counts, out_pdf, title="BUSCO Completeness Assessme
 
     ax_bar.set_yticks(y)
     ax_bar.set_yticklabels(species_order, fontsize=9)
+    ax_bar.tick_params(labelleft=True)   # restore labels suppressed by sharey=True
     ax_bar.set_xlabel("% BUSCO groups", fontsize=10)
     ax_bar.set_title(title, fontsize=11, fontweight="bold")
     ax_bar.set_xlim(0, 100)

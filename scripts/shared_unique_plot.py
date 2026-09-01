@@ -629,6 +629,7 @@ def _make_plot(species_order, shared_by_class, unique_by_class,
         _stacked_bar(ax_bar, species_order, shared_by_class, unique_by_class,
                      xlabel, title, value_fmt)
         ax_bar.set_ylim(-0.5, len(species_order) - 0.5) # force y-limits to match cladogram
+        ax_bar.tick_params(labelleft=True)   # restore labels suppressed by sharey=True
     else:
         fig, ax_bar = plt.subplots(figsize=(10, fig_h))
         _stacked_bar(ax_bar, species_order, shared_by_class, unique_by_class,
