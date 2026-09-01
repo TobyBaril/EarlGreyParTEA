@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 # earlGreyParTEA_AnnotationOnly - Pangenome TE Analysis Pipeline (Annotation Only Mode)
-# Version 0.2.1
+# Version 0.2.2
 # A Snakemake-based multi-genome transposable element annotation pipeline
 
 set -e
 
-VERSION="0.2.1"
+VERSION="0.2.2"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {

@@ -74,7 +74,34 @@ ParTEA extends EarlGrey with features designed for multi-genome comparative TE a
 
 ---
 
-## 🆕 Changes in Latest Release (v0.2.1)
+## 🆕 Changes in Latest Release (v0.2.2)
+
+### Annotation-only mode enhancements
+
+The `annotate` pipeline mode can now be driven without a pre-built library:
+
+- **Species term only** (`repeatmasker_species: arthropoda`) — the Dfam library for that clade is extracted via `famdb.py` and used directly as the annotation library.
+- **Species term + custom library** — the Dfam clade library and the user-supplied FASTA are combined (with `REPMASKER_` / `CUSTOM_` header prefixes, matching the full-pipeline convention) before annotation.
+- **Unified `custom_library` key** — `annotation_library` has been removed as a separate config key; `custom_library` now works identically in all three pipeline modes. Existing configs that used `annotation_library` continue to work via a silent backward-compatible alias.
+
+### Validation improvements
+
+- `split_chimeras: true` with `pipeline_mode: annotate` now raises a clear error at startup (the `.clstr` file required by chimera splitting is not produced in annotate mode).
+- Setting `custom_library` in annotate mode no longer silently conflicts with `repeatmasker_species`; both together now trigger the combine rule rather than an error.
+- Setting `annotation_library` in `full` / `libconstruct` mode emits a warning directing users to `custom_library`.
+- Setting `custom_library` and `repeatmasker_species` simultaneously in full/libconstruct mode continues to raise an error.
+
+### Memory allocation improvements
+
+SLURM resource allocations updated to better reflect observed peak memory usage:
+
+- `run_fasttree`: base allocation increased from 16 GB to **64 GB** per attempt (FastTree `-gamma` with large supermatrices was consistently OOM-killed at 32 GB).
+- `repeatmasker_warmup`: reduced from a wasteful fixed 32 GB to **6 GB** (the warmup only runs RepeatMasker on a 44 bp dummy sequence).
+- `repeatmasker`, `repeatmasker_custom`, `repeatmasker_annotation`: base allocation increased from 16 GB to **32 GB** per attempt for better headroom on large genomes.
+
+---
+
+## Previous Release (v0.2.1)
 
 ### Resolve RMBlast / BLAST conflicts
 
