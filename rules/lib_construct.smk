@@ -389,7 +389,7 @@ rule testrainer:
            -g {input.genome} -l {input.families} \
            -t {threads} -f {params.flank} \
            -r {params.iter} -n {params.max_seq} \
-           -m {params.min_seq}
+           -m {params.min_seq} -q
 
         # Find and copy the latest TEstrainer output from subdirectory
         latestDir=$(ls -td {params.strainer_dir}/*/ 2>/dev/null | head -n 1)
