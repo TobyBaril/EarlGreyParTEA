@@ -8,7 +8,7 @@
 
 **Because analyzing transposable elements across genomes should be a parTEA, not a chore.**
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18936437.svg)](https://doi.org/10.5281/zenodo.18936437)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18935538.svg)](https://doi.org/10.5281/zenodo.18935538)
 [![Repository](https://img.shields.io/badge/GitHub-EarlGreyParTEA-blue)](https://github.com/TobyBaril/EarlGreyParTEA)
 [![Bioconda](https://img.shields.io/conda/vn/bioconda/earlgrey-partea.svg)](https://anaconda.org/bioconda/earlgrey-partea)
 [![Dependency](https://img.shields.io/badge/Depends%20on-EarlGrey%20%E2%89%A57.3.0-green)](https://github.com/TobyBaril/EarlGrey)
@@ -34,6 +34,8 @@ ParTEA (**Pan**genome **T**ransposable **E**lement **A**nalysis) is a Snakemake-
 **If you use ParTEA in your research, please cite:**
 
 Baril, T., Galbraith, J. and Hayward, A., 2024. Earl Grey: a fully automated user-friendly transposable element annotation and analysis pipeline. *Molecular Biology and Evolution*, 41(4), p.msae068.
+
+Baril, T., Feurtey, A., Croll, D. 2026. TobyBaril/EarlGreyParTEA: Earl Grey ParTEA v0.2.1. *Zenodo*. https://doi.org/10.5281/zenodo.18935538
 
 *ParTEA manuscript in preparation.*
 
