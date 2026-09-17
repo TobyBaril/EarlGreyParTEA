@@ -58,23 +58,34 @@ rule heliano_detection:
         "{outdir}/{species}_EarlGrey/{species}_heliano/{species}.heliano_detection.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
     resources:
-        mem_mb=lambda wildcards, attempt: 16000 * attempt,
+        mem_mb=lambda wildcards, attempt: 32000 * attempt,
         runtime=480
     params:
         heliano_dir="{outdir}/{species}_EarlGrey/{species}_heliano"
     shell:
         """
+        mkdir -p {params.heliano_dir}
         exec > {log} 2>&1
         if [ "{HELIANO}" == "yes" ]; then
-            mkdir -p {params.heliano_dir}
             cd {params.heliano_dir}
-            timestamp=$(date +"%Y%m%d_%H%M")
-            heliano -g {input.genome} --nearest -dn 6000 -flank_sim 0.5 \
-                    -o {params.heliano_dir}/HEL_$timestamp -w 10000 -n {threads}
+
+            # Look for the latest HEL_ dir with a completed bed file (timestamp
+            # naming sorts lexicographically == chronologically)
+            latestHelDir=$(ls -d {params.heliano_dir}/HEL_*/ 2>/dev/null | sort | tail -n 1) || true
+
+            if [ -n "$latestHelDir" ] && [ -s "$latestHelDir/RC.representative.bed" ]; then
+                echo "Found existing completed HELIANO output in $latestHelDir — skipping rerun" >&2
+                helDir="$latestHelDir"
+            else
+                timestamp=$(date +"%Y%m%d_%H%M")
+                helDir="{params.heliano_dir}/HEL_$timestamp/"
+                heliano -g {input.genome} --nearest -dn 6000 -flank_sim 0.5 \
+                        -o "${{helDir%/}}" -w 10000 -n {threads}
+            fi
+
             awk '{{OFS="\t"}}{{print $1, "HELIANO", "RC/Helitron", $2+1, $3, $5, $6, ".", "ID="$9"_"$11";shortTE=F"}}' \
-                {params.heliano_dir}/HEL_$timestamp/RC.representative.bed > {output.helitron_gff}
+                "${{helDir}}RC.representative.bed" > {output.helitron_gff}
         else
-            mkdir -p {params.heliano_dir}
             touch {output.helitron_gff}
         fi
         """
@@ -94,7 +105,7 @@ rule merge_repeats:
         "{outdir}/{species}_EarlGrey/{species}_mergedRepeats/{species}.merge_repeats.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 32)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 32))
     resources:
-        mem_mb=lambda wildcards, attempt: 8000 * attempt,
+        mem_mb=lambda wildcards, attempt: 32000 * attempt,
         runtime=240
     params:
         script_dir=SCRIPT_DIR,

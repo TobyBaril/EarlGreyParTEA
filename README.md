@@ -33,6 +33,8 @@ ParTEA (**Pan**genome **T**ransposable **E**lement **A**nalysis) is a Snakemake-
 
 **If you use ParTEA in your research, please cite:**
 
+The ParTEA pipeline release from Zenodo using the [persistent DOI - 10.5281/zenodo.18936437](https://doi.org/10.5281/zenodo.18936437)
+
 Baril, T., Galbraith, J. and Hayward, A., 2024. Earl Grey: a fully automated user-friendly transposable element annotation and analysis pipeline. *Molecular Biology and Evolution*, 41(4), p.msae068.
 
 *ParTEA manuscript in preparation.*

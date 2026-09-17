@@ -158,7 +158,7 @@ rule prep_genome:
         "{OUTDIR}/{species}_EarlGrey/{species}.prep_genome.log"
     threads: 1
     resources:
-        mem_mb=4000,
+        mem_mb=lambda wildcards, attempt: 16000 * attempt,
         runtime=60
     params:
         script_dir=SCRIPT_DIR
@@ -370,7 +370,7 @@ rule testrainer:
         "{outdir}/{species}_EarlGrey/{species}_strainer/{species}.testrainer.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 128)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 128))
     resources:
-        mem_mb=lambda wildcards, attempt: config.get("total_memory_mb", 64000 * attempt),
+        mem_mb=lambda wildcards, attempt: config.get("total_memory_mb", 96000 * attempt),
         runtime=10080
     params:
         outdir=OUTDIR,
@@ -379,21 +379,84 @@ rule testrainer:
         max_seq=MAX_SEQ,
         min_seq=MIN_SEQ,
         script_dir=SCRIPT_DIR,
-        strainer_dir="{outdir}/{species}_EarlGrey/{species}_strainer"
+        strainer_dir="{outdir}/{species}_EarlGrey/{species}_strainer",
+        summary_dir="{outdir}/{species}_EarlGrey/{species}_summaryFiles"
     shell:
         """
         exec > {log} 2>&1
         mkdir -p {params.strainer_dir}
         cd {params.strainer_dir}
-        {params.script_dir}/TEstrainer/TEstrainer_for_earlGrey.sh \
-           -g {input.genome} -l {input.families} \
-           -t {threads} -f {params.flank} \
-           -r {params.iter} -n {params.max_seq} \
-           -m {params.min_seq} -q
+
+        # Fingerprint of the exact inputs a resumable run must match, so a
+        # TS_ dir left over from a different genome/library is never reused.
+        inputChecksum=$(cat {input.genome} {input.families} | md5sum | awk '{{print $1}}')
+
+        # Check for an intermediately-completed run to resume
+        strainDataDir=$(find . -maxdepth 1 -type d -name "TS_{wildcards.species}-families.fa_*")
+        # grep -c exits 1 when there are zero matches (the normal first-run case),
+        # which would otherwise trip `set -e` and abort before TEstrainer ever runs
+        dirCount=$(printf '%s\n' "$strainDataDir" | grep -c . || true)
+
+        if [ "$dirCount" -gt 1 ]; then
+            # multiple candidates: resume from the most recently modified one
+            strainDataDir=$(ls -td $strainDataDir | head -n 1)
+            echo "WARNING: Expected at most one TEstrainer TS_ directory, found ${{dirCount}} in {params.strainer_dir} — resuming from the latest ($strainDataDir)" >&2
+            dirCount=1
+        fi
+
+        # A run is considered already-finished if TEstrainer_for_earlGrey.sh got
+        # all the way to producing its .strained output inside the TS_ dir, even
+        # if this rule died before harvesting it (checksum write / cp / sed / mv).
+        # Detecting this up front means a completed run is never needlessly
+        # resumed or restarted by TEstrainer_for_earlGrey.sh itself, which cannot
+        # distinguish "already finished" from "never started" once its run_*
+        # working directories have been cleaned up.
+        alreadyComplete=false
+        if [ -n "$strainDataDir" ] && [ "$dirCount" -eq 1 ]; then
+            checksumFile="$strainDataDir/.inputs.md5"
+            completedFile="$strainDataDir/{wildcards.species}-families.fa.strained"
+            if [ -f "$checksumFile" ] && [ "$(cat "$checksumFile")" = "$inputChecksum" ] && [ -s "$completedFile" ]; then
+                alreadyComplete=true
+                echo "Found already-completed TEstrainer output in $strainDataDir — skipping rerun and harvesting directly" >&2
+            fi
+        fi
+
+        if [ "$alreadyComplete" == true ]; then
+            : # nothing to do — fall through to the harvest step below
+        elif [ -n "$strainDataDir" ] && [ "$dirCount" -eq 1 ]; then
+            checksumFile="$strainDataDir/.inputs.md5"
+            if [ -f "$checksumFile" ] && [ "$(cat "$checksumFile")" == "$inputChecksum" ]; then
+                # resolve to a fully-normalised absolute path while cwd is still the strainer dir
+                latestStrainDir="$(realpath "$strainDataDir")"
+                echo "Resuming TEstrainer run from $latestStrainDir" >&2
+                {params.script_dir}/TEstrainer/TEstrainer_for_earlGrey.sh \
+                   -g {input.genome} -l {input.families} \
+                   -t {threads} -f {params.flank} \
+                   -r {params.iter} -n {params.max_seq} \
+                   -m {params.min_seq} -q -d "$strainDataDir" -R
+            else
+                echo "WARNING: $strainDataDir does not match the current genome/library inputs (stale or foreign run) — removing it and starting fresh" >&2
+                rm -rf "$strainDataDir"
+                {params.script_dir}/TEstrainer/TEstrainer_for_earlGrey.sh \
+                   -g {input.genome} -l {input.families} \
+                   -t {threads} -f {params.flank} \
+                   -r {params.iter} -n {params.max_seq} \
+                   -m {params.min_seq} -q
+            fi
+        else
+            {params.script_dir}/TEstrainer/TEstrainer_for_earlGrey.sh \
+               -g {input.genome} -l {input.families} \
+               -t {threads} -f {params.flank} \
+               -r {params.iter} -n {params.max_seq} \
+               -m {params.min_seq} -q
+        fi
 
         # Find and copy the latest TEstrainer output from subdirectory
         latestDir=$(ls -td {params.strainer_dir}/*/ 2>/dev/null | head -n 1)
         if [ -n "$latestDir" ]; then
+            # Record the checksum so a later rerun can validate this dir before resuming it
+            echo "$inputChecksum" > "${{latestDir}}.inputs.md5"
+
             latestFile="${{latestDir}}{wildcards.species}-families.fa.strained"
             if [ -f "$latestFile" ]; then
                 cp "$latestFile" {output.strained}
@@ -405,4 +468,3 @@ rule testrainer:
 
         mv {output.strained}.bak {output.summary}
         """
-

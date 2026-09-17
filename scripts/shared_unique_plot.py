@@ -41,6 +41,12 @@ shared_unique_coverage.{pdf,tsv}
 shared_unique_families_phylo.pdf   (only when tree_path is set)
 shared_unique_coverage_phylo.pdf
     Same plots with species in phylogenetic order and a cladogram sidebar.
+family_matrix.tsv   (only when snakemake.output.fam_matrix_tsv is set)
+    One row per TE family, with copy-count and bp-coverage columns broken
+    out per species (count_<species>, bp_<species>, bp_nested_<species>).
+family_sharing.tsv  (only when snakemake.output.fam_sharing_tsv is set)
+    One row per TE family: how many species it is shared with, and which
+    species specifically (n_species_shared, species_list).
 """
 
 import os
@@ -198,13 +204,26 @@ def _empty_class_dict():
 # ---------------------------------------------------------------------------
 
 def _cluster_mode(species_list, gff_paths, prep_paths, clstr_file):
-    """Return (fam_data, cov_data) using cluster membership from .clstr file.
+    """Return (fam_data, cov_data, fam_matrix) using cluster membership.
 
     fam_data : dict[ species -> { 'shared_by_class': {cls: int},
                                    'unique_by_class': {cls: int} } ]
     cov_data : dict[ species -> { 'shared_bp_by_class': {cls: int},
                                    'unique_bp_by_class': {cls: int},
                                    'genome_size': int } ]
+    fam_matrix : dict[ cluster_id -> {
+                    'display_name': str,
+                    'class': str,
+                    'species_set': frozenset[str],
+                    'species_count': {species: int},        # all hits
+                    'species_bp': {species: int},            # non-nested bp
+                    'species_nested_bp': {species: int},     # nested bp
+                } ]
+        Per-family (cluster), per-species copy-count and coverage, plus the
+        exact set of species the family was found in.  This is the raw data
+        behind both the shared/unique aggregate plots above AND the new
+        family-level TSVs written by _write_family_matrix_tsv /
+        _write_family_sharing_tsv.
     """
     _, existing_clusters, cluster_to_species, rep_name_to_cluster = \
         _parse_clstr_full(clstr_file, species_list)
@@ -217,12 +236,25 @@ def _cluster_mode(species_list, gff_paths, prep_paths, clstr_file):
             raw_class = stored_name.split("#", 1)[1]
             cluster_class[cid] = _classify_te(raw_class)
 
+    # Human-readable display name per cluster (representative sequence name,
+    # class suffix stripped), used only in the new family-level TSVs.
+    cid_to_repname = {}
+    for stored_name, cid in rep_name_to_cluster.items():
+        if cid not in cid_to_repname:
+            cid_to_repname[cid] = stored_name.split("#", 1)[0]
+
     # Coverage: parse each species' GFF, match hits to clusters, accumulate.
     # GFF data is also used to confirm/update cluster_class (GFF is authoritative).
     # NOTE: annotate.smk applies `toupper($9)` to the GFF attributes, so NAME=
     # values are always uppercase.  rep_name_to_cluster keys are lowercase (from
     # the cluster file), so we build a case-folded alias map for lookup.
     rep_name_lower = {k.lower(): v for k, v in rep_name_to_cluster.items()}
+
+    # Per-family (cluster) x per-species raw accumulators, built alongside
+    # the existing class-level aggregation below (same hit loop, no re-parsing).
+    cluster_hit_count      = {}   # cid -> {sp: count}    (all hits, nested + non-nested)
+    cluster_hit_bp         = {}   # cid -> {sp: bp}       (non-nested)
+    cluster_hit_nested_bp  = {}   # cid -> {sp: bp}       (nested)
 
     cov_data = {}
     for sp, gff_path, prep_path in zip(species_list, gff_paths, prep_paths):
@@ -254,6 +286,16 @@ def _cluster_mode(species_list, gff_paths, prep_paths, clstr_file):
                         unique_bp[top_class] += bp
                     else:
                         shared_bp[top_class] += bp
+
+                # --- per-family (cluster) x per-species bookkeeping ---
+                cluster_hit_count.setdefault(cid, {})
+                cluster_hit_count[cid][sp] = cluster_hit_count[cid].get(sp, 0) + 1
+                if is_nested:
+                    cluster_hit_nested_bp.setdefault(cid, {})
+                    cluster_hit_nested_bp[cid][sp] = cluster_hit_nested_bp[cid].get(sp, 0) + bp
+                else:
+                    cluster_hit_bp.setdefault(cid, {})
+                    cluster_hit_bp[cid][sp] = cluster_hit_bp[cid].get(sp, 0) + bp
             # Hits with no matching cluster are rare (simple repeats not in
             # the combined library) and are silently omitted.
         cov_data[sp] = {
@@ -280,7 +322,21 @@ def _cluster_mode(species_list, gff_paths, prep_paths, clstr_file):
                 if sp in fam_data:
                     fam_data[sp]["shared_by_class"][top_class] += 1
 
-    return fam_data, cov_data
+    # Assemble the per-family x per-species matrix used by the new TSVs.
+    # Every cluster in cluster_to_species gets a row, even if (rarely) it had
+    # no matching coverage hits, so the family list here is complete.
+    fam_matrix = {}
+    for cid, sp_set in cluster_to_species.items():
+        fam_matrix[cid] = {
+            "display_name":      cid_to_repname.get(cid, f"cluster_{cid}"),
+            "class":              cluster_class.get(cid, "Unclassified"),
+            "species_set":        frozenset(sp_set),
+            "species_count":      cluster_hit_count.get(cid, {}),
+            "species_bp":         cluster_hit_bp.get(cid, {}),
+            "species_nested_bp":  cluster_hit_nested_bp.get(cid, {}),
+        }
+
+    return fam_data, cov_data, fam_matrix
 
 
 # ---------------------------------------------------------------------------
@@ -288,13 +344,16 @@ def _cluster_mode(species_list, gff_paths, prep_paths, clstr_file):
 # ---------------------------------------------------------------------------
 
 def _presence_absence_mode(species_list, gff_paths, prep_paths):
-    """Return (fam_data, cov_data) using cross-species presence/absence.
+    """Return (fam_data, cov_data, fam_matrix) using cross-species presence/absence.
 
     fam_data / cov_data have the same structure as _cluster_mode output.
+    fam_matrix has the same structure as _cluster_mode output, keyed by the
+    GFF NAME= value instead of a cluster id.
     """
     family_species = {}   # name -> set[species]
     family_class   = {}   # name -> top_class (last-seen)
-    family_hits    = {}   # name -> {species -> total_bp}
+    family_hits    = {}   # name -> {species -> total_bp}         (non-nested)
+    family_counts  = {}   # name -> {species -> total hit count}  (nested + non-nested)
     genome_sizes   = {}
 
     family_nested_hits = {}  # name -> {species -> total_nested_bp}
@@ -312,6 +371,9 @@ def _presence_absence_mode(species_list, gff_paths, prep_paths):
             else:
                 family_hits.setdefault(name, {}).setdefault(sp, 0)
                 family_hits[name][sp] += bp
+            # Copy count includes both nested and non-nested hits.
+            family_counts.setdefault(name, {}).setdefault(sp, 0)
+            family_counts[name][sp] += 1
 
     # Family counts (nested hits don't change family membership)
     fam_data = {sp: {
@@ -360,7 +422,19 @@ def _presence_absence_mode(species_list, gff_paths, prep_paths):
             else:
                 cov_data[sp]["unique_nested_bp_by_class"][cls] += bp
 
-    return fam_data, cov_data
+    # Assemble the per-family x per-species matrix used by the new TSVs.
+    fam_matrix = {}
+    for name, sp_set in family_species.items():
+        fam_matrix[name] = {
+            "display_name":      name,
+            "class":              family_class.get(name, "Unclassified"),
+            "species_set":        frozenset(sp_set),
+            "species_count":      family_counts.get(name, {}),
+            "species_bp":         family_hits.get(name, {}),
+            "species_nested_bp":  family_nested_hits.get(name, {}),
+        }
+
+    return fam_data, cov_data, fam_matrix
 
 
 # ---------------------------------------------------------------------------
@@ -428,6 +502,97 @@ def _write_coverage_tsv(path, species_order, cov_data, method):
             fh.write(
                 f"{sp}\t{shared_bp}\t{unique_bp}\t{shared_bp + unique_bp}\t{gs}\t"
                 f"{spct:.4f}\t{upct:.4f}\t{sc}\t{uc}\t{scn}\t{ucn}\t{method}\n"
+            )
+
+
+def _write_family_matrix_tsv(path, species_order, fam_matrix, method):
+    """Per-family x per-species table: copy count and bp coverage.
+
+    One row per TE family (cluster in 'cluster' mode, NAME= value in
+    'presence_absence' mode).  For every species, two columns are written:
+    ``count_<species>`` (number of annotation hits / copies, nested +
+    non-nested) and ``bp_<species>`` (non-nested coverage, bp).  Nested
+    insertion bp is reported separately as ``bp_nested_<species>`` — the
+    same convention already used for the shared/unique coverage TSV — so it
+    is NOT included in ``bp_<species>`` and nothing is double counted.
+
+    This is new, additive output; it does not change any existing file.
+    """
+    count_cols  = [f"count_{sp}"     for sp in species_order]
+    bp_cols     = [f"bp_{sp}"        for sp in species_order]
+    nested_cols = [f"bp_nested_{sp}" for sp in species_order]
+
+    def _total_bp(item):
+        return sum(item[1]["species_bp"].values())
+
+    with open(path, "w") as fh:
+        if method == "presence_absence":
+            fh.write(
+                "# NOTE: presence/absence classification — sequence-level "
+                "divergence not accounted for. Homologous families annotated "
+                "under different NAME= values appear as separate rows.\n"
+            )
+        fh.write(
+            "family_id\tclass\tn_species_present\ttotal_count\ttotal_bp\t"
+            + "\t".join(count_cols) + "\t"
+            + "\t".join(bp_cols) + "\t"
+            + "\t".join(nested_cols) + "\tmethod\n"
+        )
+        # Sorted by total (non-nested) bp, descending, for a readable, still
+        # fully deterministic row order (ties broken by family id).
+        for fam_id, d in sorted(
+            fam_matrix.items(), key=lambda kv: (-_total_bp(kv), str(kv[0]))
+        ):
+            counts = [str(d["species_count"].get(sp, 0))     for sp in species_order]
+            bps    = [str(d["species_bp"].get(sp, 0))         for sp in species_order]
+            nested = [str(d["species_nested_bp"].get(sp, 0))  for sp in species_order]
+            total_count = sum(d["species_count"].values())
+            total_bp    = sum(d["species_bp"].values())
+            fh.write(
+                f"{d['display_name']}\t{d['class']}\t{len(d['species_set'])}\t"
+                f"{total_count}\t{total_bp}\t"
+                + "\t".join(counts) + "\t"
+                + "\t".join(bps) + "\t"
+                + "\t".join(nested) + f"\t{method}\n"
+            )
+
+
+def _write_family_sharing_tsv(path, species_order, fam_matrix, method):
+    """Per-family sharing summary.
+
+    One row per TE family, reporting not just whether it is shared, but
+    ``n_species_shared`` (how many of the analysed genomes contain it) and
+    ``species_list`` (exactly which ones, comma-separated, in the same
+    species order used throughout the rest of the pipeline's output).
+
+    This is new, additive output; it does not change any existing file.
+    """
+    n_total = len(species_order)
+
+    def _total_bp(item):
+        return sum(item[1]["species_bp"].values())
+
+    with open(path, "w") as fh:
+        if method == "presence_absence":
+            fh.write(
+                "# NOTE: presence/absence classification — sequence-level "
+                "divergence not accounted for. Homologous families annotated "
+                "under different NAME= values will appear as unique to each "
+                "species rather than shared.\n"
+            )
+        fh.write(
+            "family_id\tclass\tn_species_shared\tn_species_total\t"
+            "shared\tspecies_list\tmethod\n"
+        )
+        for fam_id, d in sorted(
+            fam_matrix.items(), key=lambda kv: (-_total_bp(kv), str(kv[0]))
+        ):
+            n_shared = len(d["species_set"])
+            species_list = ",".join(sp for sp in species_order if sp in d["species_set"])
+            shared = "TRUE" if n_shared >= 2 else "FALSE"
+            fh.write(
+                f"{d['display_name']}\t{d['class']}\t{n_shared}\t{n_total}\t"
+                f"{shared}\t{species_list}\t{method}\n"
             )
 
 
@@ -703,18 +868,25 @@ def main():
     cov_phylo_pdf = getattr(snakemake.output, "cov_phylo_pdf", None)  # noqa: F821
     tree_path     = getattr(snakemake.input,  "tree",         None)   # noqa: F821
 
+    # New, additive per-family outputs. Both are optional: if the Snakemake
+    # rule hasn't been updated yet to declare these outputs, getattr returns
+    # None and the script behaves exactly as before — no existing output is
+    # affected either way.
+    fam_matrix_tsv  = getattr(snakemake.output, "fam_matrix_tsv",  None)  # noqa: F821
+    fam_sharing_tsv = getattr(snakemake.output, "fam_sharing_tsv", None)  # noqa: F821
+
     os.makedirs(os.path.dirname(os.path.abspath(fam_pdf)), exist_ok=True)
 
     # ---- Compute per-class shared/unique data ----
     if detection_mode == "cluster":
         clstr_file = snakemake.input.clstr   # noqa: F821
-        fam_data, cov_data = _cluster_mode(
+        fam_data, cov_data, fam_matrix = _cluster_mode(
             species_list, gff_paths, prep_paths, clstr_file
         )
         method_label = "cluster"
         print("[shared_unique] Using cluster-based detection (full mode)", flush=True)
     else:
-        fam_data, cov_data = _presence_absence_mode(
+        fam_data, cov_data, fam_matrix = _presence_absence_mode(
             species_list, gff_paths, prep_paths
         )
         method_label = "presence_absence"
@@ -745,11 +917,19 @@ def main():
     shared_cov_pct = _to_pct(shared_cov_cls)
     unique_cov_pct = _to_pct(unique_cov_cls)
 
-    # ---- Write TSVs ----
+    # ---- Write TSVs (existing outputs — unchanged) ----
     _write_family_tsv(fam_tsv, species_order, fam_data, method_label)
     _write_coverage_tsv(cov_tsv, species_order, cov_data, method_label)
     print(f"[shared_unique] Saved family TSV   → {fam_tsv}", flush=True)
     print(f"[shared_unique] Saved coverage TSV → {cov_tsv}", flush=True)
+
+    # ---- Write new per-family TSVs (additive; only if the rule declares them) ----
+    if fam_matrix_tsv:
+        _write_family_matrix_tsv(fam_matrix_tsv, species_order, fam_matrix, method_label)
+        print(f"[shared_unique] Saved family x species matrix TSV → {fam_matrix_tsv}", flush=True)
+    if fam_sharing_tsv:
+        _write_family_sharing_tsv(fam_sharing_tsv, species_order, fam_matrix, method_label)
+        print(f"[shared_unique] Saved family sharing TSV → {fam_sharing_tsv}", flush=True)
 
     # ---- Standard (alphabetical) plots ----
     _make_plot(
