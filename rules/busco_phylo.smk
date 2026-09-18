@@ -70,10 +70,10 @@ rule run_busco:
         summary=f"{{outdir}}/{{species}}_EarlGrey/{{species}}_busco/short_summary.specific.{BUSCO_LINEAGE}.{{species}}_busco.txt",
         busco_dir=directory("{outdir}/{species}_EarlGrey/{species}_busco"),
     log:
-        "{outdir}/{species}_EarlGrey/{species}_busco/{species}.run_busco.log"
+        "{outdir}/{species}_EarlGrey/{species}.run_busco.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 16)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 16))
     resources:
-        mem_mb=lambda wildcards, attempt: 16000 * attempt,
+        mem_mb=lambda wildcards, attempt: 32000 * attempt,
         runtime=480,
     conda:
         "envs/busco.yaml"
@@ -84,17 +84,40 @@ rule run_busco:
         db_path=f"{OUTDIR}/buscoPhylo/busco_db",
     shell:
         """
-        exec > {log} 2>&1
         mkdir -p {params.outdir}
+        exec > {log} 2>&1
         cd {params.outdir}
+
+        BUSCO_OUT="{wildcards.species}_busco"
+
+        # Don't rely on BUSCO's own --force/rmtree to clean up a stale output dir.
+        # On NFS, a prior killed/orphaned run can leave .nfs* "silly rename"
+        # placeholders behind, which makes shutil.rmtree() fail with
+        # "Directory not empty" even though every real file is gone.
+        if [ -d "$BUSCO_OUT" ]; then
+            rm -rf "$BUSCO_OUT" 2>/dev/null || true
+            if [ -d "$BUSCO_OUT" ]; then
+                echo "WARNING: $BUSCO_OUT still present after rm -rf, likely stale NFS .nfs* handles. Retrying after a short wait..." >&2
+                sleep 10
+                rm -rf "$BUSCO_OUT" 2>/dev/null || true
+            fi
+            if [ -d "$BUSCO_OUT" ]; then
+                echo "ERROR: could not remove $BUSCO_OUT before running BUSCO." >&2
+                echo "Check for a lingering process holding it open: fuser -v $(pwd)/$BUSCO_OUT" >&2
+                find "$BUSCO_OUT" -name '.nfs*' >&2
+                exit 1
+            fi
+        fi
+
         busco \
             -i $(realpath {input.genome}) \
             -l {params.lineage} \
-            -o {wildcards.species}_busco \
+            -o "$BUSCO_OUT" \
             -m genome \
             -c {threads} \
             --force \
-            --download_path {params.db_path}
+            --download_path {params.db_path} \
+            --offline
         """
 
 
@@ -295,7 +318,7 @@ rule run_fasttree:
         f"{OUTDIR}/buscoPhylo/fasttree.log"
     threads: lambda wildcards: max(1, min(workflow.cores, 8))
     resources:
-        mem_mb=lambda wildcards, attempt: 16000 * attempt,
+        mem_mb=lambda wildcards, attempt: 64000 * attempt,
         runtime=240,
     shell:
         """

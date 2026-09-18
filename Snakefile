@@ -35,7 +35,7 @@ MARGIN = "yes" if (_margin_val is True or _margin_val == "yes") else "no"
 
 # Get pipeline mode
 PIPELINE_MODE = config.get("pipeline_mode", "full")
-ANNOTATION_LIB = config.get("annotation_library", "")
+ANNOTATION_LIB = config.get("annotation_library") or config.get("custom_library", "")
 
 # Optional analysis modules
 RUN_SHARED_UNIQUE = config.get("run_shared_unique", False)
@@ -252,15 +252,74 @@ else:  # "full" mode (default)
             )
 
 
-# Rule to symlink user-provided library for annotation mode
+# Rule to prepare annotation library for annotate mode — three cases:
+#   1. custom_library + repeatmasker_species → combine both (mirrors full pipeline premask+cluster)
+#   2. custom_library only                  → symlink
+#   3. repeatmasker_species only            → extract from famdb
+# annotation_library is accepted as a legacy alias for custom_library.
 if PIPELINE_MODE == "annotate":
-    rule symlink_annotation_library:
-        input:
-            ANNOTATION_LIB
-        output:
-            f"{OUTDIR}/combinedLibraries/combined_all_species.clstrd.fa"
-        shell:
-            """
-            mkdir -p {OUTDIR}/combinedLibraries
-            ln -sf $(realpath {input}) {output}
-            """
+    if ANNOTATION_LIB and REPSPEC:
+        rule combine_annotation_libraries:
+            input:
+                custom=ANNOTATION_LIB,
+            output:
+                f"{OUTDIR}/combinedLibraries/combined_all_species.clstrd.fa"
+            log:
+                f"{OUTDIR}/combinedLibraries/combine_annotation_libraries.log"
+            threads: 1
+            resources:
+                mem_mb=4000,
+                runtime=30,
+            params:
+                repspec=REPSPEC,
+            shell:
+                """
+                exec > {log} 2>&1
+                mkdir -p $(dirname {output})
+                CONDA_PREFIX_RM=$(which RepeatMasker | sed 's|/bin/RepeatMasker$||')
+                FAMDB_SHARE=$(find "$CONDA_PREFIX_RM/share" -maxdepth 1 -type d -name "famdb-*" 2>/dev/null | sort -V | tail -n 1)
+                if [ -n "$FAMDB_SHARE" ]; then
+                    libpath="$FAMDB_SHARE/Libraries/famdb/"
+                else
+                    libpath="$CONDA_PREFIX_RM/share/RepeatMasker/Libraries/famdb/"
+                fi
+                famdb.py -i "$libpath" families -f fasta_name --include-class-in-name -a -d --curated {params.repspec} \\
+                    | awk '/^>/{{print ">REPMASKER_{params.repspec}_" substr($0,2); next}} {{print}}' > {output}
+                awk '/^>/{{print ">CUSTOM_" substr($0,2); next}} {{print}}' {input.custom} >> {output}
+                """
+    elif ANNOTATION_LIB:
+        rule symlink_annotation_library:
+            input:
+                ANNOTATION_LIB
+            output:
+                f"{OUTDIR}/combinedLibraries/combined_all_species.clstrd.fa"
+            shell:
+                """
+                mkdir -p {OUTDIR}/combinedLibraries
+                ln -sf $(realpath {input}) {output}
+                """
+    elif REPSPEC:
+        rule extract_annotation_library:
+            output:
+                f"{OUTDIR}/combinedLibraries/combined_all_species.clstrd.fa"
+            log:
+                f"{OUTDIR}/combinedLibraries/extract_annotation_library.log"
+            threads: 1
+            resources:
+                mem_mb=4000,
+                runtime=30,
+            params:
+                repspec=REPSPEC,
+            shell:
+                """
+                exec > {log} 2>&1
+                mkdir -p $(dirname {output})
+                CONDA_PREFIX_RM=$(which RepeatMasker | sed 's|/bin/RepeatMasker$||')
+                FAMDB_SHARE=$(find "$CONDA_PREFIX_RM/share" -maxdepth 1 -type d -name "famdb-*" 2>/dev/null | sort -V | tail -n 1)
+                if [ -n "$FAMDB_SHARE" ]; then
+                    libpath="$FAMDB_SHARE/Libraries/famdb/"
+                else
+                    libpath="$CONDA_PREFIX_RM/share/RepeatMasker/Libraries/famdb/"
+                fi
+                famdb.py -i "$libpath" families -f fasta_name --include-class-in-name -a -d --curated {params.repspec} > {output}
+                """
