@@ -59,7 +59,7 @@ rule heliano_detection:
     threads: lambda wildcards: max(1, min(workflow.cores, 64)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 64))
     resources:
         mem_mb=lambda wildcards, attempt: 32000 * attempt,
-        runtime=480
+        runtime=10080
     params:
         heliano_dir="{outdir}/{species}_EarlGrey/{species}_heliano"
     shell:
@@ -83,6 +83,7 @@ rule heliano_detection:
                         -o "${{helDir%/}}" -w 10000 -n {threads}
             fi
 
+            echo "Building final GFF output"
             awk '{{OFS="\t"}}{{print $1, "HELIANO", "RC/Helitron", $2+1, $3, $5, $6, ".", "ID="$9"_"$11";shortTE=F"}}' \
                 "${{helDir}}RC.representative.bed" > {output.helitron_gff}
         else

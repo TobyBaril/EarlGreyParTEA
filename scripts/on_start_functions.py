@@ -560,6 +560,7 @@ def validate_parameters(config, outfile = None):
     
     print("\nPlease cite the following paper when using this software:")
     print("Baril, T., Galbraith, J. and Hayward, A., 2024. Earl Grey: a fully automated user-friendly transposable element annotation and analysis pipeline. Molecular Biology and Evolution, 41(4), p.msae068. \n")
+    print("Baril, T., Feurtey, A., Croll, D. 2026. TobyBaril/EarlGreyParTEA: Earl Grey ParTEA v0.2.2. Zenodo. https://doi.org/10.5281/zenodo.18935538 \n")
     
 
     return config

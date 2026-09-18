@@ -93,6 +93,13 @@ The `annotate` pipeline mode can now be driven without a pre-built library:
 - Setting `annotation_library` in `full` / `libconstruct` mode emits a warning directing users to `custom_library`.
 - Setting `custom_library` and `repeatmasker_species` simultaneously in full/libconstruct mode continues to raise an error.
 
+### Shared/unique TE content analysis improvements
+
+- **Per-family breakdown (`family_matrix.tsv`)** — new output alongside the existing `shared_unique_families`/`shared_unique_coverage` tables: one row per TE family, with copy-count and bp-coverage columns broken out per species (`count_<species>`, `bp_<species>`, `bp_nested_<species>`). Rows are ordered most-abundant-first.
+- **Per-family sharing detail (`family_sharing.tsv`)** — new output reporting, per family, not just whether it's shared but exactly `n_species_shared` and the comma-separated `species_list` it's found in.
+- **Family abundance heatmap (`family_abundance_heatmap.pdf`)** — new figure visualizing the top N most abundant families (% genome covered) x species, with a TE-class colour strip alongside the family labels. `N` defaults to 40 and is configurable via `family_heatmap_top_n`.
+- **Bug fix — shared/unique classification in `full` (cluster) mode**: a family is now classified as shared based on whether it is *annotated* (has ≥1 GFF hit) in ≥2 species' genomes, rather than on how many species' RepeatModeler consensus sequences happened to merge into the same cd-hit cluster during combined-library construction. These are not the same thing — a family discovered by RepeatModeler in only one species can still be annotated across every genome once RepeatMasker runs against the shared merged library — and the old library-membership-based definition could misclassify such families as "unique." This fix changes the underlying data for the existing `shared_unique_families.{pdf,tsv}` and `shared_unique_coverage.{pdf,tsv}` outputs in `full`/cluster mode; **numbers from prior runs in this mode should be regenerated rather than compared directly**. `annotate` (presence/absence) mode was already annotation-based and is unaffected.
+
 ### Memory allocation improvements
 
 SLURM resource allocations updated to better reflect observed peak memory usage:

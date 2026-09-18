@@ -2870,3 +2870,38 @@ earlGreyParTEA_LibConstruct -c my_config.yaml --threads 16
 ## Release v0.2.1 - Resolve RMBlast / BLAST conflicts
 
 There is currently a conflict where BLAST, needed by BUSCO, cannot be installed with RMBLAST 2.17.0 due to incopmatibilities with the entrez-direct dependency. I have resolved this by removing the BUSCO dependency, and instead adding BUSCO env as a rule specifically for the BUSCO process, so a new env is made and used just for this step. 
+
+## Release v0.2.2 - Many updates and enhancements
+
+### Summary of changes
+## 🆕 Changes in Latest Release (v0.2.2)
+
+### Annotation-only mode enhancements
+
+The `annotate` pipeline mode can now be driven without a pre-built library:
+
+- **Species term only** (`repeatmasker_species: arthropoda`) — the Dfam library for that clade is extracted via `famdb.py` and used directly as the annotation library.
+- **Species term + custom library** — the Dfam clade library and the user-supplied FASTA are combined (with `REPMASKER_` / `CUSTOM_` header prefixes, matching the full-pipeline convention) before annotation.
+- **Unified `custom_library` key** — `annotation_library` has been removed as a separate config key; `custom_library` now works identically in all three pipeline modes. Existing configs that used `annotation_library` continue to work via a silent backward-compatible alias.
+
+### Validation improvements
+
+- `split_chimeras: true` with `pipeline_mode: annotate` now raises a clear error at startup (the `.clstr` file required by chimera splitting is not produced in annotate mode).
+- Setting `custom_library` in annotate mode no longer silently conflicts with `repeatmasker_species`; both together now trigger the combine rule rather than an error.
+- Setting `annotation_library` in `full` / `libconstruct` mode emits a warning directing users to `custom_library`.
+- Setting `custom_library` and `repeatmasker_species` simultaneously in full/libconstruct mode continues to raise an error.
+
+### Shared/unique TE content analysis improvements
+
+- **Per-family breakdown (`family_matrix.tsv`)** — new output alongside the existing `shared_unique_families`/`shared_unique_coverage` tables: one row per TE family, with copy-count and bp-coverage columns broken out per species (`count_<species>`, `bp_<species>`, `bp_nested_<species>`). Rows are ordered most-abundant-first.
+- **Per-family sharing detail (`family_sharing.tsv`)** — new output reporting, per family, not just whether it's shared but exactly `n_species_shared` and the comma-separated `species_list` it's found in.
+- **Family abundance heatmap (`family_abundance_heatmap.pdf`)** — new figure visualizing the top N most abundant families (% genome covered) x species, with a TE-class colour strip alongside the family labels. `N` defaults to 40 and is configurable via `family_heatmap_top_n`.
+- **Bug fix — shared/unique classification in `full` (cluster) mode**: a family is now classified as shared based on whether it is *annotated* (has ≥1 GFF hit) in ≥2 species' genomes, rather than on how many species' RepeatModeler consensus sequences happened to merge into the same cd-hit cluster during combined-library construction. These are not the same thing — a family discovered by RepeatModeler in only one species can still be annotated across every genome once RepeatMasker runs against the shared merged library — and the old library-membership-based definition could misclassify such families as "unique." This fix changes the underlying data for the existing `shared_unique_families.{pdf,tsv}` and `shared_unique_coverage.{pdf,tsv}` outputs in `full`/cluster mode; **numbers from prior runs in this mode should be regenerated rather than compared directly**. `annotate` (presence/absence) mode was already annotation-based and is unaffected.
+
+### Memory allocation improvements
+
+SLURM resource allocations updated to better reflect observed peak memory usage:
+
+- `run_fasttree`: base allocation increased from 16 GB to **64 GB** per attempt (FastTree `-gamma` with large supermatrices was consistently OOM-killed at 32 GB).
+- `repeatmasker_warmup`: reduced from a wasteful fixed 32 GB to **6 GB** (the warmup only runs RepeatMasker on a 44 bp dummy sequence).
+- `repeatmasker`, `repeatmasker_custom`, `repeatmasker_annotation`: base allocation increased from 16 GB to **32 GB** per attempt for better headroom on large genomes.
