@@ -1089,6 +1089,9 @@ def main():
             flush=True,
         )
 
+    # Keep the standard stacked-bar plots alphabetically ordered, as before.
+    # The heatmap can independently use phylogenetic tip order when a tree is
+    # available. This keeps the existing non-phylogenetic plots unchanged.
     species_order = sorted(species_list)
     genome_sizes  = np.array(
         [cov_data[sp]["genome_size"] for sp in species_order], dtype=float
@@ -1124,14 +1127,46 @@ def main():
         _write_family_sharing_tsv(fam_sharing_tsv, species_order, fam_matrix, method_label)
         print(f"[shared_unique] Saved family sharing TSV → {fam_sharing_tsv}", flush=True)
     if fam_heatmap_pdf:
+        # For phylogenetic runs, order heatmap columns according to the tips
+        # in the supplied species tree. The existing standard plots remain
+        # alphabetically ordered.
+        if has_phylo_tree and tree_path:
+            heatmap_species_order = _phylo_order(species_list, tree_path)
+            heatmap_genome_sizes = np.array(
+                [cov_data[sp]["genome_size"] for sp in heatmap_species_order],
+                dtype=float,
+            )
+            heatmap_title = (
+                f"Top {heatmap_top_n} TE Families — % Genome Coverage "
+                f"per Species (phylogenetic order)"
+            )
+        else:
+            heatmap_species_order = species_order
+            heatmap_genome_sizes = genome_sizes
+            heatmap_title = (
+                f"Top {heatmap_top_n} TE Families — % Genome Coverage "
+                f"per Species"
+            )
+
         family_labels, class_list, hm_mat = _family_heatmap_matrix(
-            species_order, fam_matrix, genome_sizes, top_n=heatmap_top_n
+            heatmap_species_order,
+            fam_matrix,
+            heatmap_genome_sizes,
+            top_n=heatmap_top_n,
         )
         _make_family_heatmap(
-            species_order, family_labels, class_list, hm_mat, fam_heatmap_pdf,
-            title=f"Top {len(family_labels)} TE Families — % Genome Coverage per Species",
+            heatmap_species_order,
+            family_labels,
+            class_list,
+            hm_mat,
+            fam_heatmap_pdf,
+            title=heatmap_title,
         )
-        print(f"[shared_unique] Saved family heatmap → {fam_heatmap_pdf}", flush=True)
+        print(
+            f"[shared_unique] Saved family heatmap → {fam_heatmap_pdf} "
+            f"(phylogenetic order: {has_phylo_tree and bool(tree_path)})",
+            flush=True,
+        )
 
     # ---- Standard (alphabetical) plots ----
     _make_plot(

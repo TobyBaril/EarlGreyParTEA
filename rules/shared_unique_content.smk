@@ -19,11 +19,18 @@
 #   {outdir}/{species}_EarlGrey/{species}_summaryFiles/{species}.filteredRepeats.gff
 #   {outdir}/{species}_EarlGrey/{species}.prep
 #
+# Phylogenetic modes:
+#   {OUTDIR}/buscoPhylo/species_tree.nwk
+#
 # Outputs (written to {OUTDIR}/sharedUniqueContent/)
 # ---------------------------------------------------
 #   shared_unique_families.pdf / .tsv
 #   shared_unique_coverage.pdf / .tsv
+#   family_matrix.tsv
+#   family_sharing.tsv
+#   family_abundance_heatmap.pdf
 #   (+ phylo variants when a tree is available)
+
 
 if PIPELINE_MODE == "full" and not RUN_BUSCO_PHYLO:
     rule shared_unique_plot:
@@ -43,6 +50,12 @@ if PIPELINE_MODE == "full" and not RUN_BUSCO_PHYLO:
             fam_tsv=f"{OUTDIR}/sharedUniqueContent/shared_unique_families.tsv",
             cov_pdf=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.pdf",
             cov_tsv=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.tsv",
+
+            # New family-level outputs
+            fam_matrix_tsv=f"{OUTDIR}/sharedUniqueContent/family_matrix.tsv",
+            fam_sharing_tsv=f"{OUTDIR}/sharedUniqueContent/family_sharing.tsv",
+            fam_heatmap_pdf=f"{OUTDIR}/sharedUniqueContent/family_abundance_heatmap.pdf",
+
         log:
             f"{OUTDIR}/sharedUniqueContent/shared_unique_plot.log"
         threads: 1
@@ -54,8 +67,13 @@ if PIPELINE_MODE == "full" and not RUN_BUSCO_PHYLO:
             detection_mode="cluster",
             has_phylo_tree=False,
             outdir=OUTDIR,
+
+            # Number of TE families shown in the heatmap
+            family_heatmap_top_n=40,
+
         script:
             "../scripts/shared_unique_plot.py"
+
 
 elif PIPELINE_MODE == "full" and RUN_BUSCO_PHYLO:
     rule shared_unique_plot_phylo:
@@ -70,14 +88,26 @@ elif PIPELINE_MODE == "full" and RUN_BUSCO_PHYLO:
                 "{outdir}/{species}_EarlGrey/{species}.prep",
                 outdir=OUTDIR, species=SPECIES_LIST,
             ),
+
+            # Phylogenetic tree used by the Python script to order the
+            # phylogenetic plots and family heatmap.
             tree=f"{OUTDIR}/buscoPhylo/species_tree.nwk",
+
         output:
             fam_pdf=f"{OUTDIR}/sharedUniqueContent/shared_unique_families.pdf",
             fam_tsv=f"{OUTDIR}/sharedUniqueContent/shared_unique_families.tsv",
             cov_pdf=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.pdf",
             cov_tsv=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.tsv",
+
+            # Existing phylogenetic outputs
             fam_phylo_pdf=f"{OUTDIR}/sharedUniqueContent/shared_unique_families_phylo.pdf",
             cov_phylo_pdf=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage_phylo.pdf",
+
+            # New family-level outputs
+            fam_matrix_tsv=f"{OUTDIR}/sharedUniqueContent/family_matrix.tsv",
+            fam_sharing_tsv=f"{OUTDIR}/sharedUniqueContent/family_sharing.tsv",
+            fam_heatmap_pdf=f"{OUTDIR}/sharedUniqueContent/family_abundance_heatmap.pdf",
+
         log:
             f"{OUTDIR}/sharedUniqueContent/shared_unique_plot.log"
         threads: 1
@@ -89,8 +119,13 @@ elif PIPELINE_MODE == "full" and RUN_BUSCO_PHYLO:
             detection_mode="cluster",
             has_phylo_tree=True,
             outdir=OUTDIR,
+
+            # Number of TE families shown in the heatmap
+            family_heatmap_top_n=40,
+
         script:
             "../scripts/shared_unique_plot.py"
+
 
 elif PIPELINE_MODE == "annotate" and not RUN_BUSCO_PHYLO:
     rule shared_unique_pa_plot:
@@ -109,6 +144,12 @@ elif PIPELINE_MODE == "annotate" and not RUN_BUSCO_PHYLO:
             fam_tsv=f"{OUTDIR}/sharedUniqueContent/shared_unique_families.tsv",
             cov_pdf=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.pdf",
             cov_tsv=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.tsv",
+
+            # New family-level outputs
+            fam_matrix_tsv=f"{OUTDIR}/sharedUniqueContent/family_matrix.tsv",
+            fam_sharing_tsv=f"{OUTDIR}/sharedUniqueContent/family_sharing.tsv",
+            fam_heatmap_pdf=f"{OUTDIR}/sharedUniqueContent/family_abundance_heatmap.pdf",
+
         log:
             f"{OUTDIR}/sharedUniqueContent/shared_unique_plot.log"
         threads: 1
@@ -120,8 +161,13 @@ elif PIPELINE_MODE == "annotate" and not RUN_BUSCO_PHYLO:
             detection_mode="presence_absence",
             has_phylo_tree=False,
             outdir=OUTDIR,
+
+            # Number of TE families shown in the heatmap
+            family_heatmap_top_n=40,
+
         script:
             "../scripts/shared_unique_plot.py"
+
 
 elif PIPELINE_MODE == "annotate" and RUN_BUSCO_PHYLO:
     rule shared_unique_pa_plot_phylo:
@@ -135,14 +181,26 @@ elif PIPELINE_MODE == "annotate" and RUN_BUSCO_PHYLO:
                 "{outdir}/{species}_EarlGrey/{species}.prep",
                 outdir=OUTDIR, species=SPECIES_LIST,
             ),
+
+            # Phylogenetic tree used by the Python script to order the
+            # phylogenetic plots and family heatmap.
             tree=f"{OUTDIR}/buscoPhylo/species_tree.nwk",
+
         output:
             fam_pdf=f"{OUTDIR}/sharedUniqueContent/shared_unique_families.pdf",
             fam_tsv=f"{OUTDIR}/sharedUniqueContent/shared_unique_families.tsv",
             cov_pdf=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.pdf",
             cov_tsv=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage.tsv",
+
+            # Existing phylogenetic outputs
             fam_phylo_pdf=f"{OUTDIR}/sharedUniqueContent/shared_unique_families_phylo.pdf",
             cov_phylo_pdf=f"{OUTDIR}/sharedUniqueContent/shared_unique_coverage_phylo.pdf",
+
+            # New family-level outputs
+            fam_matrix_tsv=f"{OUTDIR}/sharedUniqueContent/family_matrix.tsv",
+            fam_sharing_tsv=f"{OUTDIR}/sharedUniqueContent/family_sharing.tsv",
+            fam_heatmap_pdf=f"{OUTDIR}/sharedUniqueContent/family_abundance_heatmap.pdf",
+
         log:
             f"{OUTDIR}/sharedUniqueContent/shared_unique_plot.log"
         threads: 1
@@ -154,5 +212,9 @@ elif PIPELINE_MODE == "annotate" and RUN_BUSCO_PHYLO:
             detection_mode="presence_absence",
             has_phylo_tree=True,
             outdir=OUTDIR,
+
+            # Number of TE families shown in the heatmap
+            family_heatmap_top_n=40,
+
         script:
             "../scripts/shared_unique_plot.py"
