@@ -90,11 +90,6 @@ def parse_clstr(clstr_file, species_list):
                             rep_bare = header.split("#")[0]
                             rep_name_to_cluster[rep_bare] = cid
                             rep_name_to_cluster[header] = cid
-                            # Also store with stripped species prefix so that
-                            # GFF NAME= values (which do NOT carry the prefix)
-                            # can be resolved.
-                            bare_no_prefix = header[len(sp) + 1:].split("#")[0]
-                            rep_name_to_cluster[bare_no_prefix] = cid
                         break
         cluster_to_species_raw[cid] = species_in_cluster
 
