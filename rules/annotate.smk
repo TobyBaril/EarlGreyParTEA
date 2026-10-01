@@ -107,7 +107,7 @@ rule merge_repeats:
     threads: lambda wildcards: max(1, min(workflow.cores, 32)) if config.get("slurm_mode", False) or config.get("lsf_mode", False) else max(1, min(workflow.cores // len(SPECIES_LIST), 32))
     resources:
         mem_mb=lambda wildcards, attempt: 32000 * attempt,
-        runtime=240
+        runtime=4960
     params:
         script_dir=SCRIPT_DIR,
         outdir="{outdir}/{species}_EarlGrey/{species}_mergedRepeats/looseMerge",
